@@ -64,10 +64,16 @@ jobs:
           mkdir -p /tmp/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
+      - name: prepare digest string
+        id: prep_digest
+        run: |
+          export digest="${{ steps.build.outputs.digest }}"
+          export test_version=${digest#sha256:}
+          echo ::set-output name=digesty::$test_version
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${digest#sha256:}
+          name: digests-${{ steps.prep_digest.outputs.digesty }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
