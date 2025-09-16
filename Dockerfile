@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM rust:1.89 as cross
+FROM --platform=$BUILDPLATFORM rust:1.89 AS cross
 ARG TARGETARCH
 COPY docker/platform.sh .
 RUN ./platform.sh # should write /.platform and /.compiler
@@ -27,7 +27,7 @@ RUN groupadd $APP_USER \
     && useradd -g $APP_USER $APP_USER \
     && mkdir -p ${APP}
 
-COPY --from=cross /escpos2mqtt.bin ${APP}/notes2ics
+COPY --from=cross /escpos2mqtt.bin ${APP}/escpos2mqtt
 
 RUN chown -R $APP_USER:$APP_USER ${APP}
 
@@ -35,4 +35,3 @@ USER $APP_USER
 WORKDIR ${APP}
 
 CMD ["./escpos2mqtt"]
-
