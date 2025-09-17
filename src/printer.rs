@@ -29,7 +29,8 @@ impl<D: Driver, F: Fn() -> Result<D>> Printer<D, F> {
         printer
             .debug_mode(Some(DebugMode::Dec))
             .init()?
-            .smoothing(true)?;
+            .page_code(escpos::utils::PageCode::PC437)?
+            .smoothing(false)?;
 
         for command in &program.commands {
             use program::Command::*;
