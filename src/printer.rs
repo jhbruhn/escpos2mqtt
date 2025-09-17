@@ -61,7 +61,9 @@ impl Printer {
                         printer.print()?;
                         Ok(())
                     })();
-                    responder.send(result);
+                    responder
+                        .send(result)
+                        .expect("Response channel closed. This shouldn't happen.");
                 }
             }
         });
@@ -73,7 +75,9 @@ impl Printer {
 
     pub async fn print(&mut self, program: program::Program) -> Result<()> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        self.program_sender.send(Job(program, sender)).unwrap();
+        self.program_sender
+            .send(Job(program, sender))
+            .expect("Job queue closed. This shouldn't happen.");
         receiver.await.unwrap()
     }
 }
