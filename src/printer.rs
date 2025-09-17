@@ -1,29 +1,32 @@
 use escpos::driver::Driver;
+use escpos::errors::Result;
 use escpos::printer_options::PrinterOptions;
 use escpos::utils::DebugMode;
 use escpos::utils::Protocol;
 
 use crate::program;
 
-pub struct Printer<D: Driver> {
-    printer: escpos::printer::Printer<D>,
+pub struct Printer<D: Driver, F: Fn() -> Result<D>> {
+    driver_builder: F,
 }
 
-impl<D: Driver> Printer<D> {
-    pub fn new(driver: D) -> Self {
-        let printer = escpos::printer::Printer::new(
+impl<D: Driver, F: Fn() -> Result<D>> Printer<D, F> {
+    pub fn new(driver_builder: F) -> Self {
+        Self {
+            driver_builder: driver_builder,
+        }
+    }
+
+    pub fn print(&mut self, program: &program::Program) -> Result<()> {
+        let driver = (self.driver_builder)()?;
+        log::info!("Connected to printer.");
+
+        let mut printer = escpos::printer::Printer::new(
             driver,
             Protocol::default(),
             Some(PrinterOptions::default()),
         );
-        Self { printer: printer }
-    }
-
-    pub fn print(
-        &mut self,
-        program: &program::Program,
-    ) -> Result<(), escpos::errors::PrinterError> {
-        self.printer
+        printer
             .debug_mode(Some(DebugMode::Dec))
             .init()?
             .smoothing(true)?;
@@ -31,26 +34,26 @@ impl<D: Driver> Printer<D> {
         for command in &program.commands {
             use program::Command::*;
             match command {
-                Write(text) => self.printer.write(text)?,
-                Bold(bold) => self.printer.bold(*bold)?,
-                Underline(mode) => self.printer.underline(*mode)?,
-                DoubleStrike(mode) => self.printer.double_strike(*mode)?,
-                Font(font) => self.printer.font(*font)?,
-                Flip(flip) => self.printer.flip(*flip)?,
-                Justify(mode) => self.printer.justify(*mode)?,
-                Reverse(reverse) => self.printer.reverse(*reverse)?,
-                Feed(lines) => self.printer.feeds(*lines)?,
-                Ean13(string) => self.printer.ean13(&string)?,
-                Ean8(string) => self.printer.ean8(&string)?,
-                QrCode(string) => self.printer.qrcode(&string)?,
-                Size(x, y) => self.printer.size(*x, *y)?,
-                ResetSize => self.printer.reset_size()?,
-                Cut => self.printer.cut()?,
+                Write(text) => printer.write(text)?,
+                Bold(bold) => printer.bold(*bold)?,
+                Underline(mode) => printer.underline(*mode)?,
+                DoubleStrike(mode) => printer.double_strike(*mode)?,
+                Font(font) => printer.font(*font)?,
+                Flip(flip) => printer.flip(*flip)?,
+                Justify(mode) => printer.justify(*mode)?,
+                Reverse(reverse) => printer.reverse(*reverse)?,
+                Feed(lines) => printer.feeds(*lines)?,
+                Ean13(string) => printer.ean13(&string)?,
+                Ean8(string) => printer.ean8(&string)?,
+                QrCode(string) => printer.qrcode(&string)?,
+                Size(x, y) => printer.size(*x, *y)?,
+                ResetSize => printer.reset_size()?,
+                Cut => printer.cut()?,
                 //_ => &mut self.printer,
             };
         }
 
-        self.printer.print()?;
+        printer.print()?;
 
         Ok(())
     }

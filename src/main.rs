@@ -57,10 +57,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::init_from_env().unwrap();
 
-    log::info!("Connecting to printer at {}", config.printer_host);
-    let driver = NetworkDriver::open(&config.printer_host, 9100, None)?;
-    let mut printer = printer::Printer::new(driver);
-    log::info!("Connected to printer at {}", config.printer_host);
+    let mut printer = printer::Printer::new(|| {
+        log::info!("Connecting to printer at {}", config.printer_host);
+        NetworkDriver::open(&config.printer_host, 9100, None)
+    });
 
     log::info!("Connecting to MQTT Broker.");
     let (client, _connection) = MqttClient::<string_serializer::JsonSerializer>::connect(
