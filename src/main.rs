@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::init_from_env().unwrap();
 
-    let mut printer = printer::Printer::new(|| {
+    let mut printer = printer::Printer::new(move || {
         log::info!("Connecting to printer at {}", config.printer_host);
         NetworkDriver::open(&config.printer_host, 9100, None)
     });
@@ -90,7 +90,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )
                 } else {
                     log::info!("Printing program {:?}", program);
-                    printer.print(&program)?;
+                    if let Err(err) = printer.print(program).await {
+                        log::error!("Failed to print: {}", err);
+                    }
                 }
             }
         } else {
