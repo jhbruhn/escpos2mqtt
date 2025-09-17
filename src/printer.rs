@@ -43,6 +43,8 @@ impl<D: Driver> Printer<D> {
                 Ean13(string) => self.printer.ean13(&string)?,
                 Ean8(string) => self.printer.ean8(&string)?,
                 QrCode(string) => self.printer.qrcode(&string)?,
+                Size(x, y) => self.printer.size(*x, *y)?,
+                ResetSize => self.printer.reset_size()?,
                 Cut => self.printer.cut()?,
                 //_ => &mut self.printer,
             };

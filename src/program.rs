@@ -8,6 +8,7 @@ use nom::bytes::complete::tag_no_case;
 use nom::bytes::complete::take_while_m_n;
 use nom::bytes::is_not;
 use nom::character::complete::line_ending;
+use nom::character::complete::space0;
 use nom::character::complete::space1;
 use nom::character::complete::u8;
 use nom::combinator::eof;
@@ -17,6 +18,8 @@ use nom::multi::many0;
 use nom::sequence::delimited;
 use nom::sequence::pair;
 use nom::sequence::preceded;
+use nom::sequence::separated_pair;
+use nom::sequence::terminated;
 use nom::AsChar;
 use nom::IResult;
 use nom::Parser;
@@ -29,12 +32,12 @@ pub struct Program {
 
 impl Program {
     pub fn parse(input: &str) -> IResult<&str, Program> {
-        let (remains, commands) =
-            many0(pair(Command::parse, alt((eof, line_ending)))).parse(input)?;
-        let commands = commands
-            .iter()
-            .map(|(command, _remains)| command.clone())
-            .collect();
+        let (remains, commands) = many0(preceded(
+            space0,
+            terminated(Command::parse, alt((eof, line_ending))),
+        ))
+        .parse(input)?;
+
         Ok((remains, Program { commands }))
     }
 }
@@ -53,6 +56,8 @@ pub enum Command {
     Ean13(String),
     Ean8(String),
     QrCode(String),
+    Size(u8, u8),
+    ResetSize,
     Cut,
 }
 
@@ -154,6 +159,11 @@ impl Command {
                 preceded(pair(tag("qr_code"), space1), escaped_string),
                 Command::QrCode,
             ),
+            map(
+                preceded(pair(tag("size"), space1), separated_pair(u8, tag(","), u8)),
+                |(a, b)| Command::Size(a, b),
+            ),
+            map(tag("reset_size"), |_| Command::ResetSize),
             map(tag("cut"), |_| Command::Cut),
         ))
         .parse(input)
@@ -218,7 +228,7 @@ mod tests {
             Ok(("", Command::QrCode(String::from("rofl.de"))))
         );
 
-        let string = "write \"asdf\"\nwriteln \"rofl\"\ncut";
+        let string = "write \"asdf\"\n     \twriteln \"rofl\"\ncut";
         let command = Program::parse(&string);
         assert_eq!(
             command,
