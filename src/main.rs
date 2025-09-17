@@ -82,9 +82,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             let program_string = job.payload;
-            if let Ok((_remains, program)) = Program::parse(&program_string) {
-                log::info!("Printing program {:?}", program);
-                printer.print(&program)?;
+            if let Ok((remains, program)) = Program::parse(&program_string) {
+                if remains.len() > 0 {
+                    log::error!(
+                        "Could not fully parse program. Failed to parse from: {}",
+                        remains
+                    )
+                } else {
+                    log::info!("Printing program {:?}", program);
+                    printer.print(&program)?;
+                }
             }
         } else {
             log::error!("Could not parse message: {:?}", response);
