@@ -69,7 +69,7 @@ jobs:
         run: |
           export digest="${{ steps.build.outputs.digest }}"
           export test_version=${digest#sha256:}
-          echo ::set-output name=digesty::$test_version
+          echo "digesty=$test_version" >> $GITHUB_OUTPUT
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
