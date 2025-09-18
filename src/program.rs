@@ -59,6 +59,7 @@ pub enum Command {
     Size(u8, u8),
     ResetSize,
     Sudoku,
+    MiniCrossword,
     Cut,
 }
 
@@ -166,6 +167,7 @@ impl Command {
             ),
             map(tag("reset_size"), |_| Command::ResetSize),
             map(tag("sudoku"), |_| Command::Sudoku),
+            map(tag("minicrossword"), |_| Command::MiniCrossword),
             map(tag("cut"), |_| Command::Cut),
         ))
         .parse(input)

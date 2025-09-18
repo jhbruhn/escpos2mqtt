@@ -1,3 +1,4 @@
+use crate::minicrossword;
 use crate::program;
 use escpos::driver::Driver;
 use escpos::errors::Result;
@@ -7,6 +8,7 @@ use escpos::utils::Protocol;
 use rustoku_lib::generate_board;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot::Sender;
+use unicode_width::UnicodeWidthStr;
 
 struct Job(program::Program, Sender<Result<()>>);
 
@@ -54,6 +56,7 @@ impl Printer {
                                 Size(x, y) => printer.size(*x, *y)?,
                                 ResetSize => printer.reset_size()?,
                                 Sudoku => print_sudoku(&mut printer)?,
+                                MiniCrossword => print_mini_crossword(&mut printer)?,
                                 Cut => printer.cut()?,
                                 //_ => &mut self.printer,
                             };
@@ -81,6 +84,74 @@ impl Printer {
             .expect("Job queue closed. This shouldn't happen.");
         receiver.await.unwrap()
     }
+}
+
+fn format_list(s: &[String]) -> String {
+    match s {
+        [x] => x.clone(),
+        [x, y] => [x, " and ", y].concat(),
+        xs => {
+            let mut out = String::new();
+            for (i, x) in xs.iter().enumerate() {
+                if i == xs.len() - 1 {
+                    out.push_str(", and ");
+                } else if i != 0 {
+                    out.push_str(", ");
+                }
+                out.push_str(x);
+            }
+            out
+        }
+    }
+}
+
+fn print_mini_crossword<D: Driver>(
+    printer: &mut escpos::printer::Printer<D>,
+) -> Result<&mut escpos::printer::Printer<D>> {
+    let cw = minicrossword::get().expect("Could not get crossword");
+    let puzzle = cw.puzzle;
+    let wrap_opts = || textwrap::Options::new(32);
+
+    printer.reset_size()?;
+    printer
+        .writeln(&cw.publication_date.strftime("%A, %B %-d, %Y").to_string())?
+        .feed()?;
+    printer.justify(escpos::utils::JustifyMode::CENTER)?;
+    printer.bit_image_from_bytes(&cw.image)?;
+    printer.feeds(2)?;
+    printer.justify(escpos::utils::JustifyMode::LEFT)?;
+
+    let write_wrapped =
+        |printer: &mut escpos::printer::Printer<_>, text, opts: textwrap::Options<'_>| {
+            let text = textwrap::wrap(text, opts);
+            text.into_iter()
+                .try_for_each(|line| printer.writeln(&line).map(drop))
+        };
+
+    for clues in &puzzle.clue_lists {
+        printer.writeln(&format!("{:?}:", clues.name))?;
+        for &clue_num in &clues.clues {
+            let clue = &puzzle.clues[clue_num as usize];
+            let label = format!("{}: ", clue.label);
+            write_wrapped(
+                printer,
+                &clue.text[0].plain,
+                wrap_opts()
+                    .initial_indent(&label)
+                    .subsequent_indent(&" ".repeat(label.width())),
+            )?;
+        }
+        printer.feed()?;
+    }
+
+    write_wrapped(
+        printer,
+        &format_list(&cw.constructors),
+        wrap_opts().initial_indent("By ").subsequent_indent("   "),
+    )?;
+
+    printer.reset_size()?;
+    Ok(printer)
 }
 
 fn print_sudoku<D: Driver>(
