@@ -60,74 +60,71 @@ impl Printer {
                                     printer.reset_size()?;
                                     printer.justify(escpos::utils::JustifyMode::CENTER)?;
 
+                                    const CHARS: [[&str; 4]; 4] = [
+                                        ["┌", "┬", "╥", "┐"], // top
+                                        ["├", "┼", "╫", "┤"], // thin sep
+                                        ["╞", "╪", "╬", "╡"], // thick sep
+                                        ["└", "┴", "╨", "┘"], // bottom
+                                    ];
+
                                     for row in 0..9 {
-                                        if row == 0 {
-                                            printer.write(&'┌'.to_string())?;
+                                        // Horizontal line
+                                        if row == 0 || row == 9 {
+                                            let chars = &CHARS[if row == 0 { 0 } else { 3 }];
+                                            printer.write(chars[0])?;
                                             for i in 0..9 {
-                                                printer.write(&'─'.to_string().repeat(3))?;
+                                                printer.write("───")?;
                                                 if i < 8 {
-                                                    let c = if i % 3 == 2 { '╥' } else { '┬' };
-                                                    printer.write(&c.to_string())?;
+                                                    printer.write(
+                                                        chars[if i % 3 == 2 { 2 } else { 1 }],
+                                                    )?;
                                                 }
                                             }
-                                            printer.writeln(&'┐'.to_string())?;
+                                            printer.writeln(chars[3])?;
                                         }
-                                        printer.write(&'│'.to_string())?;
-                                        for col in 0..9 {
-                                            let n = sudoku.get(row, col);
-                                            printer.write(" ")?;
-                                            if n > 0 {
-                                                printer.write(&format!("{}", n))?;
-                                            } else {
-                                                printer.write(" ")?;
-                                            }
-                                            printer.write(" ")?;
-                                            if col % 3 == 2 && col < 8 {
-                                                printer.write(&'║'.to_string())?;
-                                            } else {
-                                                printer.write(&'│'.to_string())?;
-                                            }
-                                        }
-                                        printer.writeln("")?;
-                                        if row < 8 {
-                                            let c = if row % 3 == 2 { '╞' } else { '├' };
-                                            printer.write(&c.to_string())?;
-                                            for i in 0..9 {
-                                                let c = if row % 3 == 2 { '═' } else { '─' };
-                                                printer.write(&c.to_string().repeat(3))?;
-                                                if i < 8 {
-                                                    if i % 3 == 2 {
-                                                        let c = if row % 3 == 2 {
-                                                            '╬'
-                                                        } else {
-                                                            '╫'
-                                                        };
-                                                        printer.write(&c.to_string())?;
+
+                                        if row < 9 {
+                                            // Data row
+                                            printer.write("│")?;
+                                            for col in 0..9 {
+                                                let n = sudoku.get(row, col);
+                                                printer.write(&format!(
+                                                    " {} ",
+                                                    if n > 0 {
+                                                        n.to_string()
                                                     } else {
-                                                        let c = if row % 3 == 2 {
-                                                            '╪'
-                                                        } else {
-                                                            '┼'
-                                                        };
-                                                        printer.write(&c.to_string())?;
+                                                        " ".to_string()
+                                                    }
+                                                ))?;
+                                                printer.write(if col % 3 == 2 && col < 8 {
+                                                    "║"
+                                                } else {
+                                                    "│"
+                                                })?;
+                                            }
+                                            printer.writeln("")?;
+
+                                            // Separator
+                                            if row < 8 {
+                                                let chars =
+                                                    &CHARS[if row % 3 == 2 { 2 } else { 1 }];
+                                                printer.write(chars[0])?;
+                                                for i in 0..9 {
+                                                    printer.write(if row % 3 == 2 {
+                                                        "═══"
+                                                    } else {
+                                                        "───"
+                                                    })?;
+                                                    if i < 8 {
+                                                        printer.write(
+                                                            chars[if i % 3 == 2 { 2 } else { 1 }],
+                                                        )?;
                                                     }
                                                 }
+                                                printer.writeln(chars[3])?;
                                             }
-                                            let c = if row % 3 == 2 { '╡' } else { '┤' };
-                                            printer.writeln(&c.to_string())?;
-                                        } else {
-                                            printer.write(&'└'.to_string())?;
-                                            for i in 0..9 {
-                                                printer.write(&'─'.to_string().repeat(3))?;
-                                                if i < 8 {
-                                                    let c = if i % 3 == 2 { '╨' } else { '┴' };
-                                                    printer.write(&c.to_string())?;
-                                                }
-                                            }
-                                            printer.writeln(&'┘'.to_string())?;
                                         }
                                     }
-
                                     printer.justify(escpos::utils::JustifyMode::LEFT)?;
                                     printer.reset_size()?
                                 }
