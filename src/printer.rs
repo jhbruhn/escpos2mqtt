@@ -67,7 +67,7 @@ impl Printer {
                                         ["└", "┴", "╨", "┘"], // bottom
                                     ];
 
-                                    for row in 0..9 {
+                                    for row in 0..=9 {
                                         // Horizontal line
                                         if row == 0 || row == 9 {
                                             let chars = &CHARS[if row == 0 { 0 } else { 3 }];
