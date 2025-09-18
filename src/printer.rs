@@ -53,81 +53,7 @@ impl Printer {
                                 QrCode(string) => printer.qrcode(&string)?,
                                 Size(x, y) => printer.size(*x, *y)?,
                                 ResetSize => printer.reset_size()?,
-                                Sudoku => {
-                                    let sudoku = generate_board(40)
-                                        .expect("sudokus should always be solvable.");
-
-                                    printer.reset_size()?;
-                                    printer.justify(escpos::utils::JustifyMode::CENTER)?;
-
-                                    const CHARS: [[&str; 4]; 4] = [
-                                        ["┌", "┬", "╥", "┐"], // top
-                                        ["├", "┼", "╫", "┤"], // thin sep
-                                        ["╞", "╪", "╬", "╡"], // thick sep
-                                        ["└", "┴", "╨", "┘"], // bottom
-                                    ];
-
-                                    for row in 0..=9 {
-                                        // Horizontal line
-                                        if row == 0 || row == 9 {
-                                            let chars = &CHARS[if row == 0 { 0 } else { 3 }];
-                                            printer.write(chars[0])?;
-                                            for i in 0..9 {
-                                                printer.write("───")?;
-                                                if i < 8 {
-                                                    printer.write(
-                                                        chars[if i % 3 == 2 { 2 } else { 1 }],
-                                                    )?;
-                                                }
-                                            }
-                                            printer.writeln(chars[3])?;
-                                        }
-
-                                        if row < 9 {
-                                            // Data row
-                                            printer.write("│")?;
-                                            for col in 0..9 {
-                                                let n = sudoku.get(row, col);
-                                                printer.write(&format!(
-                                                    " {} ",
-                                                    if n > 0 {
-                                                        n.to_string()
-                                                    } else {
-                                                        " ".to_string()
-                                                    }
-                                                ))?;
-                                                printer.write(if col % 3 == 2 && col < 8 {
-                                                    "║"
-                                                } else {
-                                                    "│"
-                                                })?;
-                                            }
-                                            printer.writeln("")?;
-
-                                            // Separator
-                                            if row < 8 {
-                                                let chars =
-                                                    &CHARS[if row % 3 == 2 { 2 } else { 1 }];
-                                                printer.write(chars[0])?;
-                                                for i in 0..9 {
-                                                    printer.write(if row % 3 == 2 {
-                                                        "═══"
-                                                    } else {
-                                                        "───"
-                                                    })?;
-                                                    if i < 8 {
-                                                        printer.write(
-                                                            chars[if i % 3 == 2 { 2 } else { 1 }],
-                                                        )?;
-                                                    }
-                                                }
-                                                printer.writeln(chars[3])?;
-                                            }
-                                        }
-                                    }
-                                    printer.justify(escpos::utils::JustifyMode::LEFT)?;
-                                    printer.reset_size()?
-                                }
+                                Sudoku => print_sudoku(&mut printer)?,
                                 Cut => printer.cut()?,
                                 //_ => &mut self.printer,
                             };
@@ -155,4 +81,76 @@ impl Printer {
             .expect("Job queue closed. This shouldn't happen.");
         receiver.await.unwrap()
     }
+}
+
+fn print_sudoku<D: Driver>(
+    printer: &mut escpos::printer::Printer<D>,
+) -> Result<&mut escpos::printer::Printer<D>> {
+    let sudoku = generate_board(40).expect("sudokus should always be solvable.");
+
+    printer.reset_size()?;
+    printer.justify(escpos::utils::JustifyMode::CENTER)?;
+
+    const CHARS: [[&str; 4]; 4] = [
+        ["┌", "┬", "╥", "┐"], // top
+        ["├", "┼", "╫", "┤"], // thin sep
+        ["╞", "╪", "╬", "╡"], // thick sep
+        ["└", "┴", "╨", "┘"], // bottom
+    ];
+
+    for row in 0..=9 {
+        // Horizontal line
+        if row == 0 || row == 9 {
+            let chars = &CHARS[if row == 0 { 0 } else { 3 }];
+            printer.write(chars[0])?;
+            for i in 0..9 {
+                printer.write("───")?;
+                if i < 8 {
+                    printer.write(chars[if i % 3 == 2 { 2 } else { 1 }])?;
+                }
+            }
+            printer.writeln(chars[3])?;
+        }
+
+        if row < 9 {
+            // Data row
+            printer.write("│")?;
+            for col in 0..9 {
+                let n = sudoku.get(row, col);
+                printer.write(&format!(
+                    " {} ",
+                    if n > 0 {
+                        n.to_string()
+                    } else {
+                        " ".to_string()
+                    }
+                ))?;
+                printer.write(if col % 3 == 2 && col < 8 {
+                    "║"
+                } else {
+                    "│"
+                })?;
+            }
+            printer.writeln("")?;
+
+            // Separator
+            if row < 8 {
+                let chars = &CHARS[if row % 3 == 2 { 2 } else { 1 }];
+                printer.write(chars[0])?;
+                for i in 0..9 {
+                    printer.write(if row % 3 == 2 {
+                        "═══"
+                    } else {
+                        "───"
+                    })?;
+                    if i < 8 {
+                        printer.write(chars[if i % 3 == 2 { 2 } else { 1 }])?;
+                    }
+                }
+                printer.writeln(chars[3])?;
+            }
+        }
+    }
+    printer.justify(escpos::utils::JustifyMode::LEFT)?;
+    printer.reset_size()
 }
