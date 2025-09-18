@@ -57,7 +57,7 @@ pub struct Crossword {
 pub fn get() -> anyhow::Result<Crossword> {
     const DPI: f32 = 203.0;
 
-    let chars_per_line = 32.0;
+    let chars_per_line = 42.0;
     let pixels_per_char = 12.0;
     let mini: MiniCrossword =
         ureq::get("https://www.nytimes.com/svc/crosswords/v6/puzzle/mini.json")

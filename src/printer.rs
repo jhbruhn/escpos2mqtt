@@ -110,7 +110,7 @@ fn print_mini_crossword<D: Driver>(
 ) -> Result<&mut escpos::printer::Printer<D>> {
     let cw = minicrossword::get().expect("Could not get crossword");
     let puzzle = cw.puzzle;
-    let wrap_opts = || textwrap::Options::new(32);
+    let wrap_opts = || textwrap::Options::new(42);
 
     printer.reset_size()?;
     printer
