@@ -58,6 +58,7 @@ pub enum Command {
     QrCode(String),
     Size(u8, u8),
     ResetSize,
+    Sudoku,
     Cut,
 }
 
@@ -164,6 +165,7 @@ impl Command {
                 |(a, b)| Command::Size(a, b),
             ),
             map(tag("reset_size"), |_| Command::ResetSize),
+            map(tag("sudoku"), |_| Command::Sudoku),
             map(tag("cut"), |_| Command::Cut),
         ))
         .parse(input)

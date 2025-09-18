@@ -1,10 +1,10 @@
 use crate::program;
 use escpos::driver::Driver;
-use escpos::errors::PrinterError;
 use escpos::errors::Result;
 use escpos::printer_options::PrinterOptions;
 use escpos::utils::DebugMode;
 use escpos::utils::Protocol;
+use rustoku_lib::generate_board;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot::Sender;
 
@@ -53,6 +53,84 @@ impl Printer {
                                 QrCode(string) => printer.qrcode(&string)?,
                                 Size(x, y) => printer.size(*x, *y)?,
                                 ResetSize => printer.reset_size()?,
+                                Sudoku => {
+                                    let sudoku = generate_board(40)
+                                        .expect("sudokus should always be solvable.");
+
+                                    printer.reset_size()?;
+                                    printer.justify(escpos::utils::JustifyMode::CENTER)?;
+
+                                    for row in 0..9 {
+                                        if row == 0 {
+                                            printer.write(&'┌'.to_string())?;
+                                            for i in 0..9 {
+                                                printer.write(&'─'.to_string().repeat(3))?;
+                                                if i < 8 {
+                                                    let c = if i % 3 == 2 { '╥' } else { '┬' };
+                                                    printer.write(&c.to_string())?;
+                                                }
+                                            }
+                                            printer.writeln(&'┐'.to_string())?;
+                                        }
+                                        printer.write(&'│'.to_string())?;
+                                        for col in 0..9 {
+                                            let n = sudoku.get(row, col);
+                                            printer.write(" ")?;
+                                            if n > 0 {
+                                                printer.write(&format!("{}", n))?;
+                                            } else {
+                                                printer.write(" ")?;
+                                            }
+                                            printer.write(" ")?;
+                                            if col % 3 == 2 && col < 8 {
+                                                printer.write(&'║'.to_string())?;
+                                            } else {
+                                                printer.write(&'│'.to_string())?;
+                                            }
+                                        }
+                                        printer.writeln("")?;
+                                        if row < 8 {
+                                            let c = if row % 3 == 2 { '╞' } else { '├' };
+                                            printer.write(&c.to_string())?;
+                                            for i in 0..9 {
+                                                let c = if row % 3 == 2 { '═' } else { '─' };
+                                                printer.write(&c.to_string().repeat(3))?;
+                                                if i < 8 {
+                                                    if i % 3 == 2 {
+                                                        let c = if row % 3 == 2 {
+                                                            '╬'
+                                                        } else {
+                                                            '╫'
+                                                        };
+                                                        printer.write(&c.to_string())?;
+                                                    } else {
+                                                        let c = if row % 3 == 2 {
+                                                            '╪'
+                                                        } else {
+                                                            '┼'
+                                                        };
+                                                        printer.write(&c.to_string())?;
+                                                    }
+                                                }
+                                            }
+                                            let c = if row % 3 == 2 { '╡' } else { '┤' };
+                                            printer.writeln(&c.to_string())?;
+                                        } else {
+                                            printer.write(&'└'.to_string())?;
+                                            for i in 0..9 {
+                                                printer.write(&'─'.to_string().repeat(3))?;
+                                                if i < 8 {
+                                                    let c = if i % 3 == 2 { '╨' } else { '┴' };
+                                                    printer.write(&c.to_string())?;
+                                                }
+                                            }
+                                            printer.writeln(&'┘'.to_string())?;
+                                        }
+                                    }
+
+                                    printer.justify(escpos::utils::JustifyMode::LEFT)?;
+                                    printer.reset_size()?
+                                }
                                 Cut => printer.cut()?,
                                 //_ => &mut self.printer,
                             };
