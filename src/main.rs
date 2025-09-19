@@ -6,7 +6,7 @@ use mqtt_typed_client::MqttClient;
 use mqtt_typed_client_macros::mqtt_topic;
 use uuid::Uuid;
 
-mod minicrossword;
+mod mini_crossword;
 mod printer;
 mod program;
 mod renderer;

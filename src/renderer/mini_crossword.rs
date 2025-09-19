@@ -1,4 +1,4 @@
-use crate::minicrossword;
+use crate::mini_crossword;
 use crate::printer::Command;
 use escpos::utils::JustifyMode;
 use unicode_width::UnicodeWidthStr;
@@ -23,7 +23,7 @@ fn format_list(s: &[String]) -> String {
 }
 
 pub fn make_mini_crossword() -> Vec<Command> {
-    let cw = minicrossword::get().expect("Could not get crossword");
+    let cw = mini_crossword::get().expect("Could not get crossword");
     let puzzle = cw.puzzle;
     let wrap_opts = || textwrap::Options::new(42);
 
