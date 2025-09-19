@@ -15,7 +15,7 @@ FROM debian:bookworm-slim
 ARG APP=/usr/src/app
 
 RUN apt-get update \
-    && apt-get install -y ca-certificates tzdata fonts-freefont-ttf \
+    && apt-get install -y ca-certificates fontconfig fonts-freefont-ttf \
     && rm -rf /var/lib/apt/lists/*
 
 ENV TZ=Etc/UTC \
