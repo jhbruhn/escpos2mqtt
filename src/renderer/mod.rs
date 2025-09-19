@@ -3,24 +3,16 @@ use crate::program::{Command, Program};
 mod mini_crossword;
 mod sudoku;
 
-impl From<&Command> for Vec<printer::Command> {
-    fn from(command: &Command) -> Vec<printer::Command> {
-        match command {
+pub async fn render(program: Program) -> printer::Program {
+    printer::Program(
+        futures::future::join_all(program.commands.iter().map(async |command| match command {
             Command::Raw(cmd) => vec![cmd.clone()],
-            Command::Sudoku => sudoku::make_sudoku(),
-            Command::MiniCrossword => mini_crossword::make_mini_crossword(),
-        }
-    }
-}
-
-impl From<Program> for printer::Program {
-    fn from(program: Program) -> printer::Program {
-        printer::Program(
-            program
-                .commands
-                .iter()
-                .flat_map(|c| <&Command as Into<Vec<printer::Command>>>::into(c))
-                .collect(),
-        )
-    }
+            Command::Sudoku => sudoku::make_sudoku().await,
+            Command::MiniCrossword => mini_crossword::make_mini_crossword().await,
+        }))
+        .await
+        .iter()
+        .flat_map(|f| f.clone())
+        .collect(),
+    )
 }

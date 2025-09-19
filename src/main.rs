@@ -92,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )
                 } else {
                     log::info!("Printing program {:?}", program);
-                    if let Err(err) = printer.print(program).await {
+                    if let Err(err) = printer.print(renderer::render(program).await).await {
                         log::error!("Failed to print: {}", err);
                     } else {
                         log::info!("Printed program.")

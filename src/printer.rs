@@ -1,4 +1,3 @@
-use crate::program;
 use escpos::driver::Driver;
 use escpos::errors::Result;
 use escpos::printer_options::PrinterOptions;
@@ -98,10 +97,10 @@ impl Printer {
         }
     }
 
-    pub async fn print(&mut self, program: program::Program) -> Result<()> {
+    pub async fn print(&mut self, program: Program) -> Result<()> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         self.program_sender
-            .send(Job(program.into(), sender))
+            .send(Job(program, sender))
             .expect("Job queue closed. This shouldn't happen.");
         receiver.await.unwrap()
     }

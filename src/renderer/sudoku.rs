@@ -2,7 +2,7 @@ use crate::printer::Command;
 use escpos::utils::JustifyMode;
 use rustoku_lib::generate_board;
 
-pub fn make_sudoku() -> Vec<Command> {
+pub async fn make_sudoku() -> Vec<Command> {
     let sudoku = generate_board(40).expect("sudokus should always be solvable.");
     let mut commands = vec![Command::ResetSize, Command::Justify(JustifyMode::CENTER)];
 
