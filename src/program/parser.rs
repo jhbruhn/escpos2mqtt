@@ -1,3 +1,4 @@
+use crate::printer;
 use escpos::utils::Font;
 use escpos::utils::JustifyMode;
 use escpos::utils::UnderlineMode;
@@ -23,12 +24,8 @@ use nom::sequence::terminated;
 use nom::AsChar;
 use nom::IResult;
 use nom::Parser;
-use std::vec::Vec;
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct Program {
-    pub commands: Vec<Command>,
-}
+use crate::program::{Command, Program};
 
 impl Program {
     pub fn parse(input: &str) -> IResult<&str, Program> {
@@ -40,27 +37,6 @@ impl Program {
 
         Ok((remains, Program { commands }))
     }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum Command {
-    Write(String),
-    Bold(bool),
-    Underline(UnderlineMode),
-    DoubleStrike(bool),
-    Font(Font),
-    Flip(bool),
-    Justify(JustifyMode),
-    Reverse(bool),
-    Feed(u8),
-    Ean13(String),
-    Ean8(String),
-    QrCode(String),
-    Size(u8, u8),
-    ResetSize,
-    Sudoku,
-    MiniCrossword,
-    Cut,
 }
 
 fn escaped_string(input: &str) -> IResult<&str, String> {
@@ -116,59 +92,67 @@ impl Command {
         alt((
             map(
                 preceded(pair(tag("write"), space1), escaped_string),
-                Command::Write,
+                |string| Command::Raw(printer::Command::Write(string)),
             ),
             map(
                 preceded(pair(tag("writeln"), space1), escaped_string),
-                |string| Command::Write(string + "\n"),
+                |string| Command::Raw(printer::Command::Write(string + "\n")),
             ),
-            map(preceded(pair(tag("bold"), space1), bool), Command::Bold),
+            map(preceded(pair(tag("bold"), space1), bool), |mode| {
+                Command::Raw(printer::Command::Bold(mode))
+            }),
             map(
                 preceded(pair(tag("underline"), space1), underline_mode),
-                Command::Underline,
+                |mode| Command::Raw(printer::Command::Underline(mode)),
             ),
-            map(
-                preceded(pair(tag("double_strike"), space1), bool),
-                Command::DoubleStrike,
-            ),
-            map(preceded(pair(tag("font"), space1), font), Command::Font),
-            map(preceded(pair(tag("flip"), space1), bool), Command::Flip),
+            map(preceded(pair(tag("double_strike"), space1), bool), |mode| {
+                Command::Raw(printer::Command::DoubleStrike(mode))
+            }),
+            map(preceded(pair(tag("font"), space1), font), |font| {
+                Command::Raw(printer::Command::Font(font))
+            }),
+            map(preceded(pair(tag("flip"), space1), bool), |flip| {
+                Command::Raw(printer::Command::Flip(flip))
+            }),
             map(
                 preceded(pair(tag("justify"), space1), justify_mode),
-                Command::Justify,
+                |mode| Command::Raw(printer::Command::Justify(mode)),
             ),
-            map(
-                preceded(pair(tag("reverse"), space1), bool),
-                Command::Reverse,
-            ),
-            map(preceded(pair(tag("feed"), space1), u8), Command::Feed),
-            map(tag("feed"), |_| Command::Feed(1)),
+            map(preceded(pair(tag("reverse"), space1), bool), |reverse| {
+                Command::Raw(printer::Command::Reverse(reverse))
+            }),
+            map(preceded(pair(tag("feed"), space1), u8), |lines| {
+                Command::Raw(printer::Command::Feed(lines))
+            }),
+            map(tag("feed"), |_| Command::Raw(printer::Command::Feed(1))),
             map(
                 preceded(
                     pair(tag("ean13"), space1),
                     take_while_m_n(12, 13, AsChar::is_dec_digit),
                 ),
-                |digits| Command::Ean13(String::from(digits)),
+                |digits| Command::Raw(printer::Command::Ean13(String::from(digits))),
             ),
             map(
                 preceded(
                     pair(tag("ean8"), space1),
                     take_while_m_n(7, 8, AsChar::is_dec_digit),
                 ),
-                |digits| Command::Ean8(String::from(digits)),
+                |digits| Command::Raw(printer::Command::Ean8(String::from(digits))),
             ),
             map(
                 preceded(pair(tag("qr_code"), space1), escaped_string),
-                Command::QrCode,
+                |data| Command::Raw(printer::Command::QrCode(data)),
             ),
             map(
                 preceded(pair(tag("size"), space1), separated_pair(u8, tag(","), u8)),
-                |(a, b)| Command::Size(a, b),
+                |(a, b)| Command::Raw(printer::Command::Size(a, b)),
             ),
-            map(tag("reset_size"), |_| Command::ResetSize),
+            map(tag("reset_size"), |_| {
+                Command::Raw(printer::Command::ResetSize)
+            }),
             map(tag("sudoku"), |_| Command::Sudoku),
             map(tag("minicrossword"), |_| Command::MiniCrossword),
-            map(tag("cut"), |_| Command::Cut),
+            map(tag("cut"), |_| Command::Raw(printer::Command::Cut)),
         ))
         .parse(input)
     }
@@ -183,53 +167,113 @@ mod tests {
     fn test_add() {
         assert_eq!(
             Command::parse("writeln \"rofl\""),
-            Ok(("", Command::Write(String::from("rofl\n"))))
+            Ok((
+                "",
+                Command::Raw(printer::Command::Write(String::from("rofl\n")))
+            ))
         );
-        assert_eq!(Command::parse("bold true"), Ok(("", Command::Bold(true))));
-        assert_eq!(Command::parse("bold false"), Ok(("", Command::Bold(false))));
+        assert_eq!(
+            Command::parse("bold true"),
+            Ok(("", Command::Raw(printer::Command::Bold(true))))
+        );
+        assert_eq!(
+            Command::parse("bold false"),
+            Ok(("", Command::Raw(printer::Command::Bold(false))))
+        );
         assert_eq!(
             Command::parse("underline none"),
-            Ok(("", Command::Underline(UnderlineMode::None)))
+            Ok((
+                "",
+                Command::Raw(printer::Command::Underline(UnderlineMode::None))
+            ))
         );
         assert_eq!(
             Command::parse("underline single"),
-            Ok(("", Command::Underline(UnderlineMode::Single)))
+            Ok((
+                "",
+                Command::Raw(printer::Command::Underline(UnderlineMode::Single))
+            ))
         );
         assert_eq!(
             Command::parse("underline double"),
-            Ok(("", Command::Underline(UnderlineMode::Double)))
+            Ok((
+                "",
+                Command::Raw(printer::Command::Underline(UnderlineMode::Double))
+            ))
         );
-        assert_eq!(Command::parse("font a"), Ok(("", Command::Font(Font::A))));
-        assert_eq!(Command::parse("font b"), Ok(("", Command::Font(Font::B))));
-        assert_eq!(Command::parse("font c"), Ok(("", Command::Font(Font::C))));
-        assert_eq!(Command::parse("flip true"), Ok(("", Command::Flip(true))));
-        assert_eq!(Command::parse("flip false"), Ok(("", Command::Flip(false))));
+        assert_eq!(
+            Command::parse("font a"),
+            Ok(("", Command::Raw(printer::Command::Font(Font::A))))
+        );
+        assert_eq!(
+            Command::parse("font b"),
+            Ok(("", Command::Raw(printer::Command::Font(Font::B))))
+        );
+        assert_eq!(
+            Command::parse("font c"),
+            Ok(("", Command::Raw(printer::Command::Font(Font::C))))
+        );
+        assert_eq!(
+            Command::parse("flip true"),
+            Ok(("", Command::Raw(printer::Command::Flip(true))))
+        );
+        assert_eq!(
+            Command::parse("flip false"),
+            Ok(("", Command::Raw(printer::Command::Flip(false))))
+        );
         assert_eq!(
             Command::parse("justify left"),
-            Ok(("", Command::Justify(JustifyMode::LEFT)))
+            Ok((
+                "",
+                Command::Raw(printer::Command::Justify(JustifyMode::LEFT))
+            ))
         );
         assert_eq!(
             Command::parse("justify center"),
-            Ok(("", Command::Justify(JustifyMode::CENTER)))
+            Ok((
+                "",
+                Command::Raw(printer::Command::Justify(JustifyMode::CENTER))
+            ))
         );
         assert_eq!(
             Command::parse("justify right"),
-            Ok(("", Command::Justify(JustifyMode::RIGHT)))
+            Ok((
+                "",
+                Command::Raw(printer::Command::Justify(JustifyMode::RIGHT))
+            ))
         );
-        assert_eq!(Command::parse("feed 1"), Ok(("", Command::Feed(1))));
-        assert_eq!(Command::parse("feed 128"), Ok(("", Command::Feed(128))));
-        assert_eq!(Command::parse("feed"), Ok(("", Command::Feed(1))));
+        assert_eq!(
+            Command::parse("feed 1"),
+            Ok(("", Command::Raw(printer::Command::Feed(1))))
+        );
+        assert_eq!(
+            Command::parse("feed 128"),
+            Ok(("", Command::Raw(printer::Command::Feed(128))))
+        );
+        assert_eq!(
+            Command::parse("feed"),
+            Ok(("", Command::Raw(printer::Command::Feed(1))))
+        );
         assert_eq!(
             Command::parse("ean13 1234567890123"),
-            Ok(("", Command::Ean13(String::from("1234567890123"))))
+            Ok((
+                "",
+                Command::Raw(printer::Command::Ean13(String::from("1234567890123")))
+            ))
         );
         assert_eq!(
             Command::parse("ean8 12345678"),
-            Ok(("", Command::Ean8(String::from("12345678"))))
+            Ok((
+                "",
+                Command::Raw(printer::Command::Ean8(String::from("12345678")))
+            ))
         );
         assert_eq!(
             Command::parse("qr_code \"rofl.de\""),
-            Ok(("", Command::QrCode(String::from("rofl.de"))))
+            Ok((
+                "",
+                Command::Raw(printer::Command::QrCode(String::from("rofl.de")))
+            ))
         );
 
         let string = "write \"asdf\"\n     \twriteln \"rofl\"\ncut";
@@ -240,9 +284,9 @@ mod tests {
                 "",
                 Program {
                     commands: vec![
-                        Command::Write(String::from("asdf")),
-                        Command::Write(String::from("rofl\n")),
-                        Command::Cut
+                        Command::Raw(printer::Command::Write(String::from("asdf"))),
+                        Command::Raw(printer::Command::Write(String::from("rofl\n"))),
+                        Command::Raw(printer::Command::Cut)
                     ]
                 }
             ))

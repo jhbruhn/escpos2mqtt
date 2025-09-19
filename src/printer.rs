@@ -4,17 +4,42 @@ use escpos::driver::Driver;
 use escpos::errors::Result;
 use escpos::printer_options::PrinterOptions;
 use escpos::utils::DebugMode;
+use escpos::utils::Font;
+use escpos::utils::JustifyMode;
 use escpos::utils::Protocol;
+use escpos::utils::UnderlineMode;
 use rustoku_lib::generate_board;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot::Sender;
 use unicode_width::UnicodeWidthStr;
 
-struct Job(program::Program, Sender<Result<()>>);
-
 pub struct Printer {
     program_sender: UnboundedSender<Job>,
 }
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Command {
+    Write(String),
+    Bold(bool),
+    Underline(UnderlineMode),
+    DoubleStrike(bool),
+    Font(Font),
+    Flip(bool),
+    Justify(JustifyMode),
+    Reverse(bool),
+    Feed(u8),
+    Ean13(String),
+    Ean8(String),
+    QrCode(String),
+    Size(u8, u8),
+    ResetSize,
+    Cut,
+    BitImageFromBytes(Vec<u8>),
+}
+
+pub struct Program(Vec<Command>);
+
+struct Job(Program, Sender<Result<()>>);
 
 impl Printer {
     pub fn new<D: Driver, F: Fn() -> Result<D> + Send + Sync + 'static>(driver_builder: F) -> Self {
@@ -38,10 +63,10 @@ impl Printer {
                             .page_code(escpos::utils::PageCode::PC437)?
                             .smoothing(false)?;
 
-                        for command in &program.commands {
-                            use program::Command::*;
+                        for command in &program.0 {
+                            use Command::*;
                             match command {
-                                Write(text) => printer.write(text)?,
+                                Write(text) => printer.write(&text)?,
                                 Bold(bold) => printer.bold(*bold)?,
                                 Underline(mode) => printer.underline(*mode)?,
                                 DoubleStrike(mode) => printer.double_strike(*mode)?,
@@ -55,9 +80,8 @@ impl Printer {
                                 QrCode(string) => printer.qrcode(&string)?,
                                 Size(x, y) => printer.size(*x, *y)?,
                                 ResetSize => printer.reset_size()?,
-                                Sudoku => print_sudoku(&mut printer)?,
-                                MiniCrossword => print_mini_crossword(&mut printer)?,
                                 Cut => printer.cut()?,
+                                BitImageFromBytes(bytes) => printer.bit_image_from_bytes(&bytes)?,
                                 //_ => &mut self.printer,
                             };
                         }
@@ -80,9 +104,23 @@ impl Printer {
     pub async fn print(&mut self, program: program::Program) -> Result<()> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         self.program_sender
-            .send(Job(program, sender))
+            .send(Job(program.into(), sender))
             .expect("Job queue closed. This shouldn't happen.");
         receiver.await.unwrap()
+    }
+}
+
+impl From<program::Program> for Program {
+    fn from(program: program::Program) -> Program {
+        let mut commands = vec![];
+        for command in program.commands {
+            commands.extend(match command {
+                program::Command::Raw(cmd) => vec![cmd],
+                program::Command::Sudoku => make_sudoku(),
+                program::Command::MiniCrossword => make_mini_crossword(),
+            });
+        }
+        Program(commands)
     }
 }
 
@@ -105,62 +143,59 @@ fn format_list(s: &[String]) -> String {
     }
 }
 
-fn print_mini_crossword<D: Driver>(
-    printer: &mut escpos::printer::Printer<D>,
-) -> Result<&mut escpos::printer::Printer<D>> {
+fn make_mini_crossword() -> Vec<Command> {
     let cw = minicrossword::get().expect("Could not get crossword");
     let puzzle = cw.puzzle;
     let wrap_opts = || textwrap::Options::new(42);
 
-    printer.reset_size()?;
-    printer
-        .writeln(&cw.publication_date.strftime("%A, %B %-d, %Y").to_string())?
-        .feed()?;
-    printer.justify(escpos::utils::JustifyMode::CENTER)?;
-    printer.bit_image_from_bytes(&cw.image)?;
-    printer.feeds(2)?;
-    printer.justify(escpos::utils::JustifyMode::LEFT)?;
+    let mut commands = vec![
+        Command::ResetSize,
+        Command::Write(cw.publication_date.strftime("%A, %B %-d, %Y").to_string() + "\n"),
+        Command::Feed(1),
+        Command::ResetSize,
+        Command::Write(String::from("\n")),
+        Command::Feed(1),
+        Command::Justify(JustifyMode::CENTER),
+        Command::BitImageFromBytes(cw.image),
+        Command::Feed(2),
+        Command::Justify(JustifyMode::LEFT),
+    ];
 
-    let write_wrapped =
-        |printer: &mut escpos::printer::Printer<_>, text, opts: textwrap::Options<'_>| {
-            let text = textwrap::wrap(text, opts);
-            text.into_iter()
-                .try_for_each(|line| printer.writeln(&line).map(drop))
-        };
+    let write_wrapped = |text, opts: textwrap::Options<'_>| {
+        let text = textwrap::wrap(text, opts);
+        text.into_iter()
+            .map(|line| Command::Write(format!("{}\n", line)))
+            .collect::<Vec<Command>>()
+    };
 
     for clues in &puzzle.clue_lists {
-        printer.writeln(&format!("{:?}:", clues.name))?;
+        commands.push(Command::Write(format!("{:?}:\n", clues.name)));
         for &clue_num in &clues.clues {
             let clue = &puzzle.clues[clue_num as usize];
             let label = format!("{}: ", clue.label);
-            write_wrapped(
-                printer,
+            commands.extend(write_wrapped(
                 &clue.text[0].plain,
                 wrap_opts()
                     .initial_indent(&label)
                     .subsequent_indent(&" ".repeat(label.width())),
-            )?;
+            ));
         }
-        printer.feed()?;
+        commands.push(Command::Feed(1));
     }
 
-    write_wrapped(
-        printer,
+    commands.extend(write_wrapped(
         &format_list(&cw.constructors),
-        wrap_opts().initial_indent("By ").subsequent_indent("   "),
-    )?;
+        wrap_opts().initial_indent("by ").subsequent_indent("   "),
+    ));
 
-    printer.reset_size()?;
-    Ok(printer)
+    commands.push(Command::ResetSize);
+
+    commands
 }
 
-fn print_sudoku<D: Driver>(
-    printer: &mut escpos::printer::Printer<D>,
-) -> Result<&mut escpos::printer::Printer<D>> {
+fn make_sudoku() -> Vec<Command> {
     let sudoku = generate_board(40).expect("sudokus should always be solvable.");
-
-    printer.reset_size()?;
-    printer.justify(escpos::utils::JustifyMode::CENTER)?;
+    let mut commands = vec![Command::ResetSize, Command::Justify(JustifyMode::CENTER)];
 
     const CHARS: [[&str; 4]; 4] = [
         ["┌", "┬", "╥", "┐"], // top
@@ -173,55 +208,62 @@ fn print_sudoku<D: Driver>(
         // Horizontal line
         if row == 0 || row == 9 {
             let chars = &CHARS[if row == 0 { 0 } else { 3 }];
-            printer.write(chars[0])?;
+
+            commands.push(Command::Write(String::from(chars[0])));
             for i in 0..9 {
-                printer.write("───")?;
+                commands.push(Command::Write(String::from("───")));
                 if i < 8 {
-                    printer.write(chars[if i % 3 == 2 { 2 } else { 1 }])?;
+                    commands.push(Command::Write(String::from(
+                        chars[if i % 3 == 2 { 2 } else { 1 }],
+                    )));
                 }
             }
-            printer.writeln(chars[3])?;
+            commands.push(Command::Write(String::from(chars[3]) + "\n"));
         }
 
         if row < 9 {
             // Data row
-            printer.write("│")?;
+            commands.push(Command::Write(String::from("|")));
             for col in 0..9 {
                 let n = sudoku.get(row, col);
-                printer.write(&format!(
+                commands.push(Command::Write(format!(
                     " {} ",
                     if n > 0 {
                         n.to_string()
                     } else {
                         " ".to_string()
                     }
-                ))?;
-                printer.write(if col % 3 == 2 && col < 8 {
+                )));
+                commands.push(Command::Write(String::from(if col % 3 == 2 && col < 8 {
                     "║"
                 } else {
                     "│"
-                })?;
+                })));
             }
-            printer.writeln("")?;
+            commands.push(Command::Write(String::from("\n")));
 
             // Separator
             if row < 8 {
                 let chars = &CHARS[if row % 3 == 2 { 2 } else { 1 }];
-                printer.write(chars[0])?;
+                commands.push(Command::Write(String::from(chars[0])));
                 for i in 0..9 {
-                    printer.write(if row % 3 == 2 {
+                    commands.push(Command::Write(String::from(if row % 3 == 2 {
                         "═══"
                     } else {
                         "───"
-                    })?;
+                    })));
                     if i < 8 {
-                        printer.write(chars[if i % 3 == 2 { 2 } else { 1 }])?;
+                        commands.push(Command::Write(String::from(
+                            chars[if i % 3 == 2 { 2 } else { 1 }],
+                        )));
                     }
                 }
-                printer.writeln(chars[3])?;
+                commands.push(Command::Write(String::from(chars[3]) + "\n"));
             }
         }
     }
-    printer.justify(escpos::utils::JustifyMode::LEFT)?;
-    printer.reset_size()
+    commands.push(Command::Justify(JustifyMode::LEFT));
+    commands.push(Command::ResetSize);
+
+    commands
 }
