@@ -13,6 +13,18 @@ pub async fn render(program: Program) -> printer::Program {
             Command::Raw(cmd) => vec![cmd.clone()],
             Command::Sudoku => sudoku::make_sudoku().await,
             Command::MiniCrossword => mini_crossword::make_mini_crossword().await,
+            Command::ToDo(item) => {
+                let prefix = "- [ ] ";
+                textwrap::wrap(
+                    item,
+                    textwrap::Options::new(CHARS_PER_LINE as usize)
+                        .initial_indent(prefix)
+                        .subsequent_indent(&" ".repeat(prefix.len())),
+                )
+                .into_iter()
+                .map(|line| printer::Command::Write(format!("{}\n", line)))
+                .collect()
+            }
         }))
         .await
         .iter()

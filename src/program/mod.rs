@@ -7,6 +7,7 @@ pub enum Command {
     Raw(printer::Command),
     Sudoku,
     MiniCrossword,
+    ToDo(String),
 }
 
 #[derive(Debug, PartialEq, Clone)]

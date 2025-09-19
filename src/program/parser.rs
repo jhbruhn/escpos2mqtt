@@ -153,6 +153,10 @@ impl Command {
             map(tag("sudoku"), |_| Command::Sudoku),
             map(tag("minicrossword"), |_| Command::MiniCrossword),
             map(tag("cut"), |_| Command::Raw(printer::Command::Cut)),
+            map(
+                preceded(pair(tag("todo"), space1), escaped_string),
+                Command::ToDo,
+            ),
         ))
         .parse(input)
     }
