@@ -1,11 +1,8 @@
 use crate::mini_crossword::{self, MiniCrosswordOptions};
 use crate::printer::Command;
+use crate::renderer::{CHARS_PER_LINE, DPI, PIXELS_PER_CHAR};
 use escpos::utils::JustifyMode;
 use unicode_width::UnicodeWidthStr;
-
-const DPI: f32 = 203.0;
-const PIXELS_PER_CHAR: u8 = 12;
-const CHARS_PER_LINE: u8 = 42;
 
 fn format_list(s: &[String]) -> String {
     match s {
@@ -34,6 +31,7 @@ pub async fn make_mini_crossword() -> Vec<Command> {
     })
     .await
     .expect("Could not get crossword");
+
     let puzzle = cw.puzzle;
     let wrap_opts = || textwrap::Options::new(CHARS_PER_LINE as usize);
 

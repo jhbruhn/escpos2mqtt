@@ -3,6 +3,10 @@ use crate::program::{Command, Program};
 mod mini_crossword;
 mod sudoku;
 
+const DPI: f32 = 203.0;
+const PIXELS_PER_CHAR: u8 = 12;
+const CHARS_PER_LINE: u8 = 42;
+
 pub async fn render(program: Program) -> printer::Program {
     printer::Program(
         futures::future::join_all(program.commands.iter().map(async |command| match command {
