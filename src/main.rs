@@ -9,6 +9,7 @@ use uuid::Uuid;
 mod minicrossword;
 mod printer;
 mod program;
+mod renderer;
 mod string_serializer;
 
 use crate::program::Program;

@@ -1,4 +1,3 @@
-use crate::minicrossword;
 use crate::program;
 use escpos::driver::Driver;
 use escpos::errors::Result;
@@ -8,10 +7,8 @@ use escpos::utils::Font;
 use escpos::utils::JustifyMode;
 use escpos::utils::Protocol;
 use escpos::utils::UnderlineMode;
-use rustoku_lib::generate_board;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot::Sender;
-use unicode_width::UnicodeWidthStr;
 
 pub struct Printer {
     program_sender: UnboundedSender<Job>,
@@ -37,7 +34,7 @@ pub enum Command {
     BitImageFromBytes(Vec<u8>),
 }
 
-pub struct Program(Vec<Command>);
+pub struct Program(pub Vec<Command>);
 
 struct Job(Program, Sender<Result<()>>);
 
@@ -108,162 +105,4 @@ impl Printer {
             .expect("Job queue closed. This shouldn't happen.");
         receiver.await.unwrap()
     }
-}
-
-impl From<program::Program> for Program {
-    fn from(program: program::Program) -> Program {
-        let mut commands = vec![];
-        for command in program.commands {
-            commands.extend(match command {
-                program::Command::Raw(cmd) => vec![cmd],
-                program::Command::Sudoku => make_sudoku(),
-                program::Command::MiniCrossword => make_mini_crossword(),
-            });
-        }
-        Program(commands)
-    }
-}
-
-fn format_list(s: &[String]) -> String {
-    match s {
-        [x] => x.clone(),
-        [x, y] => [x, " and ", y].concat(),
-        xs => {
-            let mut out = String::new();
-            for (i, x) in xs.iter().enumerate() {
-                if i == xs.len() - 1 {
-                    out.push_str(", and ");
-                } else if i != 0 {
-                    out.push_str(", ");
-                }
-                out.push_str(x);
-            }
-            out
-        }
-    }
-}
-
-fn make_mini_crossword() -> Vec<Command> {
-    let cw = minicrossword::get().expect("Could not get crossword");
-    let puzzle = cw.puzzle;
-    let wrap_opts = || textwrap::Options::new(42);
-
-    let mut commands = vec![
-        Command::ResetSize,
-        Command::Write(cw.publication_date.strftime("%A, %B %-d, %Y").to_string() + "\n"),
-        Command::Feed(1),
-        Command::ResetSize,
-        Command::Write(String::from("\n")),
-        Command::Feed(1),
-        Command::Justify(JustifyMode::CENTER),
-        Command::BitImageFromBytes(cw.image),
-        Command::Feed(2),
-        Command::Justify(JustifyMode::LEFT),
-    ];
-
-    let write_wrapped = |text, opts: textwrap::Options<'_>| {
-        let text = textwrap::wrap(text, opts);
-        text.into_iter()
-            .map(|line| Command::Write(format!("{}\n", line)))
-            .collect::<Vec<Command>>()
-    };
-
-    for clues in &puzzle.clue_lists {
-        commands.push(Command::Write(format!("{:?}:\n", clues.name)));
-        for &clue_num in &clues.clues {
-            let clue = &puzzle.clues[clue_num as usize];
-            let label = format!("{}: ", clue.label);
-            commands.extend(write_wrapped(
-                &clue.text[0].plain,
-                wrap_opts()
-                    .initial_indent(&label)
-                    .subsequent_indent(&" ".repeat(label.width())),
-            ));
-        }
-        commands.push(Command::Feed(1));
-    }
-
-    commands.extend(write_wrapped(
-        &format_list(&cw.constructors),
-        wrap_opts().initial_indent("by ").subsequent_indent("   "),
-    ));
-
-    commands.push(Command::ResetSize);
-
-    commands
-}
-
-fn make_sudoku() -> Vec<Command> {
-    let sudoku = generate_board(40).expect("sudokus should always be solvable.");
-    let mut commands = vec![Command::ResetSize, Command::Justify(JustifyMode::CENTER)];
-
-    const CHARS: [[&str; 4]; 4] = [
-        ["┌", "┬", "╥", "┐"], // top
-        ["├", "┼", "╫", "┤"], // thin sep
-        ["╞", "╪", "╬", "╡"], // thick sep
-        ["└", "┴", "╨", "┘"], // bottom
-    ];
-
-    for row in 0..=9 {
-        // Horizontal line
-        if row == 0 || row == 9 {
-            let chars = &CHARS[if row == 0 { 0 } else { 3 }];
-
-            commands.push(Command::Write(String::from(chars[0])));
-            for i in 0..9 {
-                commands.push(Command::Write(String::from("───")));
-                if i < 8 {
-                    commands.push(Command::Write(String::from(
-                        chars[if i % 3 == 2 { 2 } else { 1 }],
-                    )));
-                }
-            }
-            commands.push(Command::Write(String::from(chars[3]) + "\n"));
-        }
-
-        if row < 9 {
-            // Data row
-            commands.push(Command::Write(String::from("|")));
-            for col in 0..9 {
-                let n = sudoku.get(row, col);
-                commands.push(Command::Write(format!(
-                    " {} ",
-                    if n > 0 {
-                        n.to_string()
-                    } else {
-                        " ".to_string()
-                    }
-                )));
-                commands.push(Command::Write(String::from(if col % 3 == 2 && col < 8 {
-                    "║"
-                } else {
-                    "│"
-                })));
-            }
-            commands.push(Command::Write(String::from("\n")));
-
-            // Separator
-            if row < 8 {
-                let chars = &CHARS[if row % 3 == 2 { 2 } else { 1 }];
-                commands.push(Command::Write(String::from(chars[0])));
-                for i in 0..9 {
-                    commands.push(Command::Write(String::from(if row % 3 == 2 {
-                        "═══"
-                    } else {
-                        "───"
-                    })));
-                    if i < 8 {
-                        commands.push(Command::Write(String::from(
-                            chars[if i % 3 == 2 { 2 } else { 1 }],
-                        )));
-                    }
-                }
-                commands.push(Command::Write(String::from(chars[3]) + "\n"));
-            }
-        }
-    }
-    commands.push(Command::Justify(JustifyMode::LEFT));
-    commands.push(Command::ResetSize);
-
-    commands
 }
