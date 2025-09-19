@@ -37,13 +37,15 @@ pub async fn make_mini_crossword() -> Vec<Command> {
 
     let mut commands = vec![
         Command::ResetSize,
+        Command::Justify(JustifyMode::CENTER),
         Command::Write(cw.publication_date.strftime("%A, %B %-d, %Y").to_string() + "\n"),
         Command::Feed(1),
         Command::ResetSize,
         Command::Write(String::from("\n")),
         Command::Feed(1),
         Command::Justify(JustifyMode::CENTER),
-        Command::BitImageFromBytes(cw.image),
+        Command::Write(puzzle.render_ascii()),
+        //Command::BitImageFromBytes(cw.image),
         Command::Feed(2),
         Command::Justify(JustifyMode::LEFT),
     ];
