@@ -31,7 +31,6 @@ pub enum Command {
     Size(u8, u8),
     ResetSize,
     Cut,
-    BitImageFromBytes(Vec<u8>),
     BitImageFromBytesWithWidth(Vec<u8>, u32),
 }
 
@@ -79,7 +78,6 @@ impl Printer {
                                 Size(x, y) => printer.size(*x, *y)?,
                                 ResetSize => printer.reset_size()?,
                                 Cut => printer.cut()?,
-                                BitImageFromBytes(bytes) => printer.bit_image_from_bytes(&bytes)?,
                                 BitImageFromBytesWithWidth(bytes, width) => printer
                                     .bit_image_from_bytes_option(&bytes, {
                                         BitImageOption::new(
