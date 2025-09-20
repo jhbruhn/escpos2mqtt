@@ -87,13 +87,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         let response = subscriber.receive().await;
+
         if let Some(Ok(job)) = response {
             if job.printer != config.printer_name {
+                log::info!("{} is not us ({})", job.printer, config.printer_name);
                 continue;
             }
 
             let program_string = job.payload;
-            if let Ok((remains, program)) = Program::parse(&program_string) {
+            let parsed = Program::parse(&program_string);
+            if let Ok((remains, program)) = parsed {
                 if remains.len() > 0 {
                     log::error!(
                         "Could not fully parse program. Failed to parse from: {}",
@@ -121,6 +124,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         log::info!("Printed program.")
                     }
                 }
+            } else if let Err(err) = parsed {
+                log::error!("Could not parse program: {}", err);
             }
         } else {
             log::error!("Could not parse message: {:?}", response);

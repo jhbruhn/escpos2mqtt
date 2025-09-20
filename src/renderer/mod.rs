@@ -17,15 +17,18 @@ pub async fn render(program: Program, render_options: RenderOptions) -> printer:
             Command::MiniCrossword => mini_crossword::make_mini_crossword(&render_options).await,
             Command::ToDo(item) => {
                 let prefix = "- [ ] ";
-                textwrap::wrap(
-                    item,
-                    textwrap::Options::new(render_options.chars_per_line as usize)
-                        .initial_indent(prefix)
-                        .subsequent_indent(&" ".repeat(prefix.len())),
-                )
-                .into_iter()
-                .map(|line| printer::Command::Write(format!("{}\n", line)))
-                .collect()
+                std::iter::once(printer::Command::Justify(escpos::utils::JustifyMode::LEFT))
+                    .chain(
+                        textwrap::wrap(
+                            item,
+                            textwrap::Options::new(render_options.chars_per_line as usize)
+                                .initial_indent(prefix)
+                                .subsequent_indent(&" ".repeat(prefix.len())),
+                        )
+                        .into_iter()
+                        .map(|line| printer::Command::Write(format!("{}\n", line))),
+                    )
+                    .collect()
             }
         }))
         .await

@@ -29,13 +29,26 @@ use crate::program::{Command, Program};
 
 impl Program {
     pub fn parse(input: &str) -> IResult<&str, Program> {
-        let (remains, commands) = many0(preceded(
-            space0,
-            terminated(terminated(Command::parse, space0), alt((eof, line_ending))),
-        ))
+        let (remains, commands) = many0(alt((
+            // Parse a command line
+            map(
+                preceded(
+                    space0,
+                    terminated(Command::parse, preceded(space0, alt((eof, line_ending)))),
+                ),
+                Some,
+            ),
+            // Skip empty lines
+            map(terminated(space0, line_ending), |_| None),
+        )))
         .parse(input)?;
 
-        Ok((remains, Program { commands }))
+        Ok((
+            remains,
+            Program {
+                commands: commands.into_iter().flatten().collect(),
+            },
+        ))
     }
 }
 
@@ -280,7 +293,7 @@ mod tests {
             ))
         );
 
-        let string = "write \"asdf\"\t\n     \twriteln \"rofl\"\ncut";
+        let string = "write \"asdf\"\t\n   \n\n\t\n  \twriteln \"rofl\"\ncut";
         let command = Program::parse(&string);
         assert_eq!(
             command,
