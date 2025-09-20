@@ -25,10 +25,10 @@ struct Config {
     #[envconfig(from = "PRINTER_DPI", default = "203.0")]
     pub printer_dpi: f32,
 
-    #[envconfig(from = "PRINTER_CHARS_PER_LINE", default = "12")]
+    #[envconfig(from = "PRINTER_CHARS_PER_LINE", default = "42")]
     pub printer_chars_per_line: u32,
 
-    #[envconfig(from = "PRINTER_PIXELS_PER_CHAR", default = "42")]
+    #[envconfig(from = "PRINTER_PIXELS_PER_CHAR", default = "12")]
     pub printer_pixels_per_char: u32,
 
     #[envconfig(from = "MQTT_URL")]
