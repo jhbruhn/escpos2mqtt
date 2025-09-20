@@ -1,6 +1,6 @@
 use crate::mini_crossword::{self, MiniCrosswordOptions};
 use crate::printer::Command;
-use crate::renderer::{CHARS_PER_LINE, DPI, PIXELS_PER_CHAR};
+use crate::renderer::RenderOptions;
 use escpos::utils::JustifyMode;
 use unicode_width::UnicodeWidthStr;
 
@@ -23,17 +23,16 @@ fn format_list(s: &[String]) -> String {
     }
 }
 
-pub async fn make_mini_crossword() -> Vec<Command> {
+pub async fn make_mini_crossword(render_options: &RenderOptions) -> Vec<Command> {
     let cw = mini_crossword::get(MiniCrosswordOptions {
-        dpi: DPI,
-        pixels_per_char: PIXELS_PER_CHAR,
-        chars_per_line: CHARS_PER_LINE,
+        dpi: render_options.dpi,
+        target_width: render_options.chars_per_line * render_options.pixels_per_char,
     })
     .await
     .expect("Could not get crossword");
 
     let puzzle = cw.puzzle;
-    let wrap_opts = || textwrap::Options::new(CHARS_PER_LINE as usize);
+    let wrap_opts = || textwrap::Options::new(render_options.chars_per_line as usize);
 
     let mut commands = vec![
         Command::ResetSize,

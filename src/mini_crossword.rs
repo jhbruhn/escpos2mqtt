@@ -30,8 +30,7 @@ const NYT_MINI_CROSSWORD_URL: &str = "https://www.nytimes.com/svc/crosswords/v6/
 
 pub struct MiniCrosswordOptions {
     pub dpi: f32,
-    pub chars_per_line: u8,
-    pub pixels_per_char: u8,
+    pub target_width: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -267,13 +266,11 @@ fn render_crossword(svg: &str, options: MiniCrosswordOptions) -> Result<Vec<u8>,
     let svg = usvg::Tree::from_str(&svg, &opt).map_err(Error::SVG)?;
     let size = svg.size();
 
-    let target_width = options.pixels_per_char as u32 * options.chars_per_line as u32;
-
-    let scale = target_width as f32 / svg.size().width();
+    let scale = options.target_width as f32 / svg.size().width();
     // canvas width should be the full width of the paper, but the render transform is rounded
     // to an even-ish number so that lines don't get lost rendering to the low resolution
     let scale = (scale * 100.0).round() / 100.0;
-    let canvas_size = usvg::Size::from_wh(target_width as f32, size.height() * scale)
+    let canvas_size = usvg::Size::from_wh(options.target_width as f32, size.height() * scale)
         .unwrap()
         .to_int_size();
     let trans = usvg::Transform::from_scale(scale, scale);
