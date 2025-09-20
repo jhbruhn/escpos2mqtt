@@ -22,14 +22,8 @@ struct Config {
     #[envconfig(from = "PRINTER_NAME", default = "printer")]
     pub printer_name: String,
 
-    #[envconfig(from = "PRINTER_DPI", default = "203.0")]
-    pub printer_dpi: f32,
-
-    #[envconfig(from = "PRINTER_CHARS_PER_LINE", default = "42")]
-    pub printer_chars_per_line: u32,
-
-    #[envconfig(from = "PRINTER_PIXELS_PER_CHAR", default = "12")]
-    pub printer_pixels_per_char: u32,
+    #[envconfig(from = "PRINTER_MODEL", default = "default")]
+    pub printer_model: String,
 
     #[envconfig(from = "MQTT_URL")]
     pub mqtt_url: String,
@@ -67,6 +61,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     let config = Config::init_from_env().unwrap();
+
+    let printer_profile = escpos_db::ALL_PROFILES
+        .get(&config.printer_model)
+        .expect(&format!(
+            "Printer model {} not found!",
+            &config.printer_model
+        ));
 
     let mut printer = printer::Printer::new(move || {
         log::info!("Connecting to printer at {}", config.printer_host);
@@ -106,17 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     log::info!("Printing program {:?}", program);
 
                     if let Err(err) = printer
-                        .print(
-                            renderer::render(
-                                program,
-                                renderer::RenderOptions {
-                                    dpi: config.printer_dpi,
-                                    chars_per_line: config.printer_chars_per_line,
-                                    pixels_per_char: config.printer_pixels_per_char,
-                                },
-                            )
-                            .await,
-                        )
+                        .print(renderer::render(program, printer_profile).await)
                         .await
                     {
                         log::error!("Failed to print: {}", err);

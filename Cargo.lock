@@ -486,6 +486,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "escpos-db"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97ce98773340dcd71c9b5792e2fb40890a5e7bee93486da70e9b90d95bbe8d0a"
+dependencies = [
+ "bitflags 2.9.4",
+ "phf",
+]
+
+[[package]]
 name = "escpos2mqtt"
 version = "0.1.0"
 dependencies = [
@@ -493,6 +503,7 @@ dependencies = [
  "env_logger",
  "envconfig",
  "escpos",
+ "escpos-db",
  "futures",
  "jiff",
  "log",
@@ -1539,6 +1550,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "phf"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd6780a80ae0c52cc120a26a1a42c1ae51b247a253e4e06113d23d2c2edd078"
+dependencies = [
+ "phf_shared",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67eabc2ef2a60eb7faa00097bd1ffdb5bd28e62bf39990626a582201b7a754e5"
+dependencies = [
+ "siphasher",
+]
+
+[[package]]
 name = "pico-args"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1725,7 +1754,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

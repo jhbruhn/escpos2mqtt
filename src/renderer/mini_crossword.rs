@@ -1,6 +1,5 @@
 use crate::mini_crossword::{self, MiniCrosswordOptions};
 use crate::printer::Command;
-use crate::renderer::RenderOptions;
 use escpos::utils::JustifyMode;
 use unicode_width::UnicodeWidthStr;
 
@@ -23,16 +22,20 @@ fn format_list(s: &[String]) -> String {
     }
 }
 
-pub async fn make_mini_crossword(render_options: &RenderOptions) -> Vec<Command> {
+pub async fn make_mini_crossword(
+    dpi: u16,
+    target_width: u32,
+    columns_per_line: u32,
+) -> Vec<Command> {
     let cw = mini_crossword::get(MiniCrosswordOptions {
-        dpi: render_options.dpi,
-        target_width: render_options.chars_per_line * render_options.pixels_per_char,
+        dpi: dpi,
+        target_width: target_width,
     })
     .await
     .expect("Could not get crossword");
 
     let puzzle = cw.puzzle;
-    let wrap_opts = || textwrap::Options::new(render_options.chars_per_line as usize);
+    let wrap_opts = || textwrap::Options::new(columns_per_line as usize);
 
     let mut commands = vec![
         Command::ResetSize,
@@ -43,9 +46,10 @@ pub async fn make_mini_crossword(render_options: &RenderOptions) -> Vec<Command>
         Command::Write(String::from("\n")),
         Command::Feed(1),
         Command::Justify(JustifyMode::CENTER),
-        puzzle
-            .render_ascii()
-            .map_or(Command::BitImageFromBytes(cw.image), Command::Write),
+        puzzle.render_ascii().map_or(
+            Command::BitImageFromBytesWithWidth(cw.image, target_width),
+            Command::Write,
+        ),
         //Command::BitImageFromBytes(cw.image),
         Command::Feed(2),
         Command::Justify(JustifyMode::LEFT),

@@ -29,7 +29,7 @@ impl std::error::Error for Error {}
 const NYT_MINI_CROSSWORD_URL: &str = "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini.json";
 
 pub struct MiniCrosswordOptions {
-    pub dpi: f32,
+    pub dpi: u16,
     pub target_width: u32,
 }
 
@@ -258,7 +258,7 @@ async fn fetch_mini_crossword() -> Result<MiniCrossword, reqwest::Error> {
 
 fn render_crossword(svg: &str, options: MiniCrosswordOptions) -> Result<Vec<u8>, Error> {
     let mut opt = usvg::Options {
-        dpi: options.dpi,
+        dpi: options.dpi as f32,
         shape_rendering: usvg::ShapeRendering::CrispEdges,
         ..Default::default()
     };
@@ -267,9 +267,6 @@ fn render_crossword(svg: &str, options: MiniCrosswordOptions) -> Result<Vec<u8>,
     let size = svg.size();
 
     let scale = options.target_width as f32 / svg.size().width();
-    // canvas width should be the full width of the paper, but the render transform is rounded
-    // to an even-ish number so that lines don't get lost rendering to the low resolution
-    let scale = (scale * 100.0).round() / 100.0;
     let canvas_size = usvg::Size::from_wh(options.target_width as f32, size.height() * scale)
         .unwrap()
         .to_int_size();

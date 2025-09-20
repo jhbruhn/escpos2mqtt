@@ -1,6 +1,7 @@
 use escpos::driver::Driver;
 use escpos::errors::Result;
 use escpos::printer_options::PrinterOptions;
+use escpos::utils::BitImageOption;
 use escpos::utils::DebugMode;
 use escpos::utils::Font;
 use escpos::utils::JustifyMode;
@@ -31,6 +32,7 @@ pub enum Command {
     ResetSize,
     Cut,
     BitImageFromBytes(Vec<u8>),
+    BitImageFromBytesWithWidth(Vec<u8>, u32),
 }
 
 pub struct Program(pub Vec<Command>);
@@ -78,7 +80,14 @@ impl Printer {
                                 ResetSize => printer.reset_size()?,
                                 Cut => printer.cut()?,
                                 BitImageFromBytes(bytes) => printer.bit_image_from_bytes(&bytes)?,
-                                //_ => &mut self.printer,
+                                BitImageFromBytesWithWidth(bytes, width) => printer
+                                    .bit_image_from_bytes_option(&bytes, {
+                                        BitImageOption::new(
+                                            Some(*width),
+                                            None,
+                                            escpos::utils::BitImageSize::Normal,
+                                        )?
+                                    })?, //_ => &mut self.printer,
                             };
                         }
 

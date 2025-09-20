@@ -8,6 +8,7 @@ anyhow = "1.0.99"
 env_logger = "0.11.8"
 envconfig = "0.11.0"
 escpos = {version = "0.17.0", features = ["graphics"] }
+escpos-db = "0.1.2"
 futures = "0.3.31"
 jiff = {version = "0.2.15", features = ["serde"] }
 log = "0.4.28"
