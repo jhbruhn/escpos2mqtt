@@ -44,7 +44,9 @@ pub async fn make_mini_crossword() -> Vec<Command> {
         Command::Write(String::from("\n")),
         Command::Feed(1),
         Command::Justify(JustifyMode::CENTER),
-        Command::Write(puzzle.render_ascii()),
+        puzzle
+            .render_ascii()
+            .map_or(Command::BitImageFromBytes(cw.image), Command::Write),
         //Command::BitImageFromBytes(cw.image),
         Command::Feed(2),
         Command::Justify(JustifyMode::LEFT),

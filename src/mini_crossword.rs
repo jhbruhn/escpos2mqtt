@@ -7,6 +7,7 @@ pub enum Error {
     Request(reqwest::Error),
     SVG(usvg::Error),
     PNGEncoding,
+    NotFiveByFive,
 }
 
 impl std::fmt::Display for Error {
@@ -16,6 +17,7 @@ impl std::fmt::Display for Error {
             Error::Request(re) => write!(f, "{re}"),
             Error::SVG(se) => write!(f, "{se}"),
             Error::PNGEncoding => write!(f, "PNG Encoding"),
+            Error::NotFiveByFive => write!(f, "ASCII could not be rendered as puzzle is not 5x5"),
         }
     }
 }
@@ -47,7 +49,7 @@ pub struct Puzzle {
     board: String,
     pub clue_lists: Vec<ClueList>,
     pub clues: Vec<Clue>,
-    pub cells: [Cell; 5 * 5],
+    pub cells: Vec<Cell>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -98,7 +100,10 @@ const CHARS: [[&str; 4]; 4] = [
 
 impl Puzzle {
     /// Renders the 5x5 crossword puzzle as ASCII art
-    pub fn render_ascii(&self) -> String {
+    pub fn render_ascii(&self) -> Result<String, Error> {
+        if self.cells.len() != 5 * 5 {
+            return Err(Error::NotFiveByFive);
+        }
         let mut result = String::new();
 
         // Each cell is 8 characters wide (including borders)
@@ -126,7 +131,7 @@ impl Puzzle {
         result.push_str(&self.render_bottom_border());
         result.push('\n');
 
-        result
+        Ok(result)
     }
 
     fn render_top_border(&self) -> String {
@@ -186,8 +191,6 @@ impl Puzzle {
         let mut line = String::new();
 
         for col in 0..5 {
-            let cell_idx = 4 * 5 + col; // Last row
-
             if col == 0 {
                 line.push_str(CHARS[3][0]); // └
             } else {
