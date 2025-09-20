@@ -31,7 +31,7 @@ impl Program {
     pub fn parse(input: &str) -> IResult<&str, Program> {
         let (remains, commands) = many0(preceded(
             space0,
-            terminated(Command::parse, alt((eof, line_ending))),
+            terminated(terminated(Command::parse, space0), alt((eof, line_ending))),
         ))
         .parse(input)?;
 
@@ -280,7 +280,7 @@ mod tests {
             ))
         );
 
-        let string = "write \"asdf\"\n     \twriteln \"rofl\"\ncut";
+        let string = "write \"asdf\"\t\n     \twriteln \"rofl\"\ncut";
         let command = Program::parse(&string);
         assert_eq!(
             command,
