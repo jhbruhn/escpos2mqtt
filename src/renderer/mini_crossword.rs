@@ -46,10 +46,7 @@ pub async fn make_mini_crossword(
         Command::Write(String::from("\n")),
         Command::Feed(1),
         Command::Justify(JustifyMode::CENTER),
-        puzzle.render_ascii().map_or(
-            Command::BitImageFromBytesWithWidth(cw.image, target_width),
-            Command::Write,
-        ),
+        Command::BitImageFromBytesWithWidth(cw.image, target_width),
         //Command::BitImageFromBytes(cw.image),
         Command::Feed(2),
         Command::Justify(JustifyMode::LEFT),
