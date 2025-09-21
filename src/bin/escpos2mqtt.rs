@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::init_from_env().unwrap();
 
-    let printer_profile = escpos_db::ALL_PROFILES
+    let default_profile = escpos_db::ALL_PROFILES
         .get(&config.printer_model)
         .expect(&format!(
             "Printer model {} not found!",
@@ -84,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     config.printer_model
                 ),
             ),
-            printer_profile,
+            default_profile,
         ),
     );
 
@@ -96,9 +96,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log::info!(
             "Adding network-discovered printer with id {} and model {}",
             id,
-            printer_profile.name
+            default_profile.name
         );
-        printers.insert(id, (discovered_printer, printer_profile));
+        printers.insert(id, (discovered_printer, default_profile));
     }
 
     log::info!("Connecting to MQTT Broker.");
