@@ -6,13 +6,7 @@ use mqtt_typed_client::MqttClient;
 use mqtt_typed_client_macros::mqtt_topic;
 use uuid::Uuid;
 
-mod mini_crossword;
-mod printer;
-mod program;
-mod renderer;
-mod string_serializer;
-
-use crate::program::Program;
+use escpos2mqtt::*;
 
 #[derive(Envconfig)]
 struct Config {
@@ -96,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             let program_string = job.payload;
-            let parsed = Program::parse(&program_string);
+            let parsed = program::Program::parse(&program_string);
             if let Ok((remains, program)) = parsed {
                 if remains.len() > 0 {
                     log::error!(
