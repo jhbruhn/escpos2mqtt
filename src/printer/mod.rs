@@ -1,4 +1,5 @@
 use escpos::driver::Driver;
+use escpos::driver::NetworkDriver;
 use escpos::errors::PrinterError;
 use escpos::printer_options::PrinterOptions;
 use escpos::utils::BitImageOption;
@@ -11,13 +12,20 @@ use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot::Sender;
 
+mod discover;
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("failed to print")]
     Printer(#[from] PrinterError),
+    #[error("discovery error")]
+    Discovery(#[from] discover::Error),
 }
 
+#[derive(Debug)]
 pub struct Printer {
+    pub name: String,
+    pub description: String,
     program_sender: UnboundedSender<Job>,
 }
 
@@ -48,6 +56,8 @@ struct Job(Program, Sender<Result<(), Error>>);
 impl Printer {
     pub fn new<D: Driver, F: Fn() -> Result<D, PrinterError> + Send + Sync + 'static>(
         driver_builder: F,
+        name: &str,
+        description: &str,
     ) -> Self {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<Job>();
 
@@ -111,6 +121,8 @@ impl Printer {
 
         Self {
             program_sender: sender,
+            name: name.to_string(),
+            description: description.to_string(),
         }
     }
 
@@ -121,4 +133,22 @@ impl Printer {
             .expect("Job queue closed. This shouldn't happen.");
         receiver.await.unwrap()
     }
+}
+
+pub async fn discover_network() -> Result<Vec<Printer>, Error> {
+    let printers = discover::discover_network_printers()
+        .await
+        .map_err(Error::Discovery)?;
+    Ok(printers
+        .into_iter()
+        .map(|info| {
+            Printer::new(
+                move || {
+                    NetworkDriver::open(&info.address.ip().to_string(), info.address.port(), None)
+                },
+                &info.name,
+                &info.description,
+            )
+        })
+        .collect())
 }
