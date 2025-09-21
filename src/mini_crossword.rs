@@ -29,7 +29,6 @@ pub struct MiniCrosswordOptions {
 pub struct MiniCrossword {
     pub body: Vec<Puzzle>,
     constructors: Vec<String>,
-    _editor: String,
     publication_date: Date,
 }
 
