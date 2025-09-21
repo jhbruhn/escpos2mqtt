@@ -1,5 +1,5 @@
 use escpos::driver::Driver;
-use escpos::errors::Result;
+use escpos::errors::PrinterError;
 use escpos::printer_options::PrinterOptions;
 use escpos::utils::BitImageOption;
 use escpos::utils::DebugMode;
@@ -7,8 +7,15 @@ use escpos::utils::Font;
 use escpos::utils::JustifyMode;
 use escpos::utils::Protocol;
 use escpos::utils::UnderlineMode;
+use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot::Sender;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("failed to print")]
+    Printer(#[from] PrinterError),
+}
 
 pub struct Printer {
     program_sender: UnboundedSender<Job>,
@@ -36,10 +43,12 @@ pub enum Command {
 
 pub struct Program(pub Vec<Command>);
 
-struct Job(Program, Sender<Result<()>>);
+struct Job(Program, Sender<Result<(), Error>>);
 
 impl Printer {
-    pub fn new<D: Driver, F: Fn() -> Result<D> + Send + Sync + 'static>(driver_builder: F) -> Self {
+    pub fn new<D: Driver, F: Fn() -> Result<D, PrinterError> + Send + Sync + 'static>(
+        driver_builder: F,
+    ) -> Self {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<Job>();
 
         tokio::spawn(async move {
@@ -91,7 +100,8 @@ impl Printer {
 
                         printer.print()?;
                         Ok(())
-                    })();
+                    })()
+                    .map_err(Error::Printer);
                     responder
                         .send(result)
                         .expect("Response channel closed. This shouldn't happen.");
@@ -104,7 +114,7 @@ impl Printer {
         }
     }
 
-    pub async fn print(&mut self, program: Program) -> Result<()> {
+    pub async fn print(&mut self, program: Program) -> Result<(), Error> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         self.program_sender
             .send(Job(program, sender))

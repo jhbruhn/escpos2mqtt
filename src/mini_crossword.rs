@@ -1,28 +1,19 @@
 use jiff::civil::Date;
 use resvg::{tiny_skia, usvg};
 use serde::Deserialize;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum Error {
-    Request(reqwest::Error),
-    SVG(usvg::Error),
+    #[error("request failed")]
+    Request(#[from] reqwest::Error),
+    #[error("SVG parsing failed")]
+    SVG(#[from] usvg::Error),
+    #[error("PNG parsing failed")]
     PNGEncoding,
+    #[error("Ascii representation can only be rendered for 5x5 crosswords")]
     NotFiveByFive,
 }
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MiniCrossword Error: ")?;
-        match self {
-            Error::Request(re) => write!(f, "{re}"),
-            Error::SVG(se) => write!(f, "{se}"),
-            Error::PNGEncoding => write!(f, "PNG Encoding"),
-            Error::NotFiveByFive => write!(f, "ASCII could not be rendered as puzzle is not 5x5"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 // This code is large derived from previous work by github.com/coolreader18
 
