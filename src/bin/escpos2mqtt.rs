@@ -13,8 +13,8 @@ struct Config {
     #[envconfig(from = "PRINTER_HOST")]
     pub printer_host: String,
 
-    #[envconfig(from = "PRINTER_MODEL", default = "default")]
-    pub printer_model: String,
+    #[envconfig(from = "PRINTER_MODEL")]
+    pub printer_model: Option<String>,
 
     #[envconfig(from = "MQTT_URL")]
     pub mqtt_url: String,
@@ -53,52 +53,72 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::init_from_env().unwrap();
 
-    let default_profile = escpos_db::ALL_PROFILES
-        .get(&config.printer_model)
-        .expect(&format!(
-            "Printer model {} not found!",
-            &config.printer_model
-        ));
-
     let mut printers = HashMap::new();
 
     const MANUAL_PRINTER_ID: &str = "manual";
 
-    log::info!(
-        "Adding manually configured printer with id {}, host {} and model {}",
-        MANUAL_PRINTER_ID,
-        &config.printer_host,
-        &config.printer_model,
+    let mut manual_printer = printer::Printer::new(
+        move || {
+            log::info!("Connecting to printer at {}", &config.printer_host);
+            NetworkDriver::open(&config.printer_host, 9100, None)
+        },
+        "Manual Printer",
+        "Manually configured printer",
     );
+    let manual_model_name = manual_printer.model_name().await;
+
+    if let Some(overrider) = &config.printer_model {
+        if let Ok(manual_model_name) = &manual_model_name {
+            if manual_model_name != overrider {
+                log::warn!(
+                    "Overriding manual printer type with {} (actual type is {})",
+                    overrider,
+                    manual_model_name
+                );
+            }
+        }
+    }
+    let manual_printer_model_config = config
+        .printer_model
+        .clone()
+        .or(manual_printer.model_name().await.ok())
+        .unwrap_or("default".to_string());
+
+    log::info!(
+        "Adding manually configured printer with id {}, and model {}",
+        MANUAL_PRINTER_ID,
+        &manual_printer_model_config,
+    );
+
+    let default_profile = escpos_db::ALL_PROFILES
+        .get(&manual_printer_model_config)
+        .expect(&format!(
+            "Printer model {} not found!",
+            &manual_printer_model_config
+        ));
+
     printers.insert(
         MANUAL_PRINTER_ID.to_string(),
-        (
-            printer::Printer::new(
-                move || {
-                    log::info!("Connecting to printer at {}", config.printer_host);
-                    NetworkDriver::open(&config.printer_host, 9100, None)
-                },
-                "Manual Printer",
-                &format!(
-                    "Manually configured printer of type {}",
-                    config.printer_model
-                ),
-            ),
-            default_profile,
-        ),
+        (manual_printer, default_profile),
     );
 
     let discovered_printers = printer::discover_network().await?;
 
-    for discovered_printer in discovered_printers {
+    for mut discovered_printer in discovered_printers {
         let id = discovered_printer.name.to_lowercase();
 
+        let model_name = discovered_printer
+            .model_name()
+            .await
+            .ok()
+            .unwrap_or(manual_printer_model_config.clone());
+        let profile = escpos_db::ALL_PROFILES.get(&model_name).unwrap();
         log::info!(
-            "Adding network-discovered printer with id {} and model {}",
+            "Adding network-discovered printer with id {} and model {:?}",
             id,
-            default_profile.name
+            &profile.name
         );
-        printers.insert(id, (discovered_printer, default_profile));
+        printers.insert(id, (discovered_printer, &profile));
     }
 
     log::info!("Connecting to MQTT Broker.");
