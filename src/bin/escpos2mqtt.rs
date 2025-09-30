@@ -1,6 +1,7 @@
 use env_logger;
 use envconfig::Envconfig;
 use escpos::driver::NetworkDriver;
+use escpos_db::Profile;
 use mqtt_typed_client::MqttClient;
 use mqtt_typed_client_macros::mqtt_topic;
 use std::collections::HashMap;
@@ -47,20 +48,18 @@ pub fn build_url(base_url: &str, client_id_prefix: &str) -> String {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
-
-    let config = Config::init_from_env().unwrap();
-
+async fn get_printers(
+    config: &Config,
+) -> anyhow::Result<HashMap<String, (printer::Printer, &Profile<'static>)>> {
     let mut printers = HashMap::new();
 
     const MANUAL_PRINTER_ID: &str = "manual";
+    let host = config.printer_host.clone();
 
     let mut manual_printer = printer::Printer::new(
         move || {
-            log::info!("Connecting to printer at {}", &config.printer_host);
-            NetworkDriver::open(&config.printer_host, 9100, None)
+            log::info!("Connecting to printer at {}", &host);
+            NetworkDriver::open(&host, 9100, None)
         },
         "Manual Printer",
         "Manually configured printer",
@@ -99,7 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     printers.insert(
         MANUAL_PRINTER_ID.to_string(),
-        (manual_printer, default_profile),
+        (manual_printer, (*default_profile)),
     );
 
     let discovered_printers = printer::discover_network().await?;
@@ -118,7 +117,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             id,
             &profile.name
         );
-        printers.insert(id, (discovered_printer, &profile));
+        printers.insert(id, (discovered_printer, (*profile)));
+    }
+
+    Ok(printers)
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
+
+    let config = Config::init_from_env().unwrap();
+
+    log::info!("Running printer discovery");
+    let printers = get_printers(&config).await;
+    if let Ok(printers) = printers {
+        log::info!("Printer discovery finished, discovered printers:");
+        for entry in printers.iter() {
+            log::info!("Printer {}: {}", entry.0, entry.1 .1.name);
+        }
+        if printers.len() == 0 {
+            log::info!("No printers discovered!");
+        }
+    } else if let Err(err) = printers {
+        log::error!("Could not discovery printers, {}", err);
     }
 
     log::info!("Connecting to MQTT Broker.");
@@ -131,40 +153,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut subscriber = topic_client.subscribe().await?;
 
-    for id in printers.keys() {
-        log::info!("Listening on escpos/{}/print", id);
-    }
+    log::info!("Listening for print jobs");
 
     loop {
         let response = subscriber.receive().await;
 
         if let Some(Ok(job)) = response {
-            if let Some((printer, profile)) = printers.get_mut(job.printer.as_str()) {
-                let program_string = job.payload;
-                let parsed = program::Program::parse(&program_string);
-                if let Ok((remains, program)) = parsed {
-                    if remains.len() > 0 {
-                        log::error!(
-                            "Could not fully parse program. Failed to parse from: {}",
-                            remains
-                        )
-                    } else {
-                        log::info!("Printing program {:?}", program);
-
-                        if let Err(err) = printer
-                            .print(renderer::render(program, profile).await)
-                            .await
-                        {
-                            log::error!("Failed to print: {}", err);
+            let printers = get_printers(&config).await;
+            if let Ok(mut printers) = printers {
+                if let Some((printer, profile)) = printers.get_mut(job.printer.as_str()) {
+                    let program_string = job.payload;
+                    let parsed = program::Program::parse(&program_string);
+                    if let Ok((remains, program)) = parsed {
+                        if remains.len() > 0 {
+                            log::error!(
+                                "Could not fully parse program. Failed to parse from: {}",
+                                remains
+                            )
                         } else {
-                            log::info!("Printed program.")
+                            log::info!("Printing program {:?}", program);
+
+                            if let Err(err) = printer
+                                .print(renderer::render(program, profile).await)
+                                .await
+                            {
+                                log::error!("Failed to print: {}", err);
+                            } else {
+                                log::info!("Printed program.")
+                            }
                         }
+                    } else if let Err(err) = parsed {
+                        log::error!("Could not parse program: {}", err);
                     }
-                } else if let Err(err) = parsed {
-                    log::error!("Could not parse program: {}", err);
+                } else {
+                    log::error!("Could not find printer with id {}", job.printer);
                 }
             } else {
-                log::error!("Could not find printer with id {}", job.printer);
+                log::error!("Could not discover printers: {}", printers.unwrap_err());
             }
         } else {
             log::error!("Could not parse message: {:?}", response);
