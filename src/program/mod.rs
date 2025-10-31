@@ -1,6 +1,8 @@
 use crate::printer;
 
 mod parser;
+pub mod documentation;
+pub mod doc_macros;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Command {

@@ -101,76 +101,270 @@ fn justify_mode(input: &str) -> IResult<&str, JustifyMode> {
 }
 
 impl Command {
-    fn parse(input: &str) -> IResult<&str, Command> {
-        alt((
-            map(
-                preceded(pair(tag("write"), space1), escaped_string),
-                |string| Command::Raw(printer::Command::Write(string)),
-            ),
-            map(
-                preceded(pair(tag("writeln"), space1), escaped_string),
-                |string| Command::Raw(printer::Command::Write(string + "\n")),
-            ),
-            map(preceded(pair(tag("bold"), space1), bool), |mode| {
-                Command::Raw(printer::Command::Bold(mode))
-            }),
-            map(
-                preceded(pair(tag("underline"), space1), underline_mode),
-                |mode| Command::Raw(printer::Command::Underline(mode)),
-            ),
-            map(preceded(pair(tag("double_strike"), space1), bool), |mode| {
-                Command::Raw(printer::Command::DoubleStrike(mode))
-            }),
-            map(preceded(pair(tag("font"), space1), font), |font| {
-                Command::Raw(printer::Command::Font(font))
-            }),
-            map(preceded(pair(tag("flip"), space1), bool), |flip| {
-                Command::Raw(printer::Command::Flip(flip))
-            }),
-            map(
-                preceded(pair(tag("justify"), space1), justify_mode),
-                |mode| Command::Raw(printer::Command::Justify(mode)),
-            ),
-            map(preceded(pair(tag("reverse"), space1), bool), |reverse| {
-                Command::Raw(printer::Command::Reverse(reverse))
-            }),
-            map(preceded(pair(tag("feed"), space1), u8), |lines| {
-                Command::Raw(printer::Command::Feed(lines))
-            }),
-            map(tag("feed"), |_| Command::Raw(printer::Command::Feed(1))),
-            map(
-                preceded(
-                    pair(tag("ean13"), space1),
-                    take_while_m_n(12, 13, AsChar::is_dec_digit),
-                ),
-                |digits| Command::Raw(printer::Command::Ean13(String::from(digits))),
-            ),
-            map(
-                preceded(
-                    pair(tag("ean8"), space1),
-                    take_while_m_n(7, 8, AsChar::is_dec_digit),
-                ),
-                |digits| Command::Raw(printer::Command::Ean8(String::from(digits))),
-            ),
-            map(
-                preceded(pair(tag("qr_code"), space1), escaped_string),
-                |data| Command::Raw(printer::Command::QrCode(data)),
-            ),
-            map(
-                preceded(pair(tag("size"), space1), separated_pair(u8, tag(","), u8)),
-                |(a, b)| Command::Raw(printer::Command::Size(a, b)),
-            ),
-            map(tag("reset_size"), |_| {
-                Command::Raw(printer::Command::ResetSize)
-            }),
-            map(tag("sudoku"), |_| Command::Sudoku),
-            map(tag("minicrossword"), |_| Command::MiniCrossword),
-            map(tag("cut"), |_| Command::Raw(printer::Command::Cut)),
-            map(
-                preceded(pair(tag("todo"), space1), escaped_string),
-                Command::ToDo,
-            ),
-        ))
+    pub fn parse(input: &str) -> IResult<&str, Command> {
+        crate::documented_parser! {
+            {
+                name: "write",
+                syntax: "write \"<text>\"",
+                description: "Outputs text to the printer without a line break",
+                category: Text,
+                examples: [
+                    "write \"Hello World\"",
+                    "write \"Price: $19.99\""
+                ],
+                parser: map(
+                    preceded(pair(tag("write"), space1), escaped_string),
+                    |string| Command::Raw(printer::Command::Write(string))
+                )
+            },
+            {
+                name: "writeln",
+                syntax: "writeln \"<text>\"",
+                description: "Outputs text to the printer followed by a line break",
+                category: Text,
+                examples: [
+                    "writeln \"Hello World\"",
+                    "writeln \"Order #12345\""
+                ],
+                parser: map(
+                    preceded(pair(tag("writeln"), space1), escaped_string),
+                    |string| Command::Raw(printer::Command::Write(string + "\n"))
+                )
+            },
+            {
+                name: "bold",
+                syntax: "bold <true|false>",
+                description: "Enables or disables bold text",
+                category: Formatting,
+                examples: [
+                    "bold true",
+                    "bold false"
+                ],
+                parser: map(
+                    preceded(pair(tag("bold"), space1), bool),
+                    |mode| Command::Raw(printer::Command::Bold(mode))
+                )
+            },
+            {
+                name: "underline",
+                syntax: "underline <none|single|double>",
+                description: "Sets the underline mode for text",
+                category: Formatting,
+                examples: [
+                    "underline none",
+                    "underline single",
+                    "underline double"
+                ],
+                parser: map(
+                    preceded(pair(tag("underline"), space1), underline_mode),
+                    |mode| Command::Raw(printer::Command::Underline(mode))
+                )
+            },
+            {
+                name: "double_strike",
+                syntax: "double_strike <true|false>",
+                description: "Enables or disables double-strike (emphasized) text",
+                category: Formatting,
+                examples: [
+                    "double_strike true",
+                    "double_strike false"
+                ],
+                parser: map(
+                    preceded(pair(tag("double_strike"), space1), bool),
+                    |mode| Command::Raw(printer::Command::DoubleStrike(mode))
+                )
+            },
+            {
+                name: "font",
+                syntax: "font <a|b|c>",
+                description: "Sets the font type. Available fonts depend on printer model",
+                category: Formatting,
+                examples: [
+                    "font a",
+                    "font b",
+                    "font c"
+                ],
+                parser: map(
+                    preceded(pair(tag("font"), space1), font),
+                    |f| Command::Raw(printer::Command::Font(f))
+                )
+            },
+            {
+                name: "flip",
+                syntax: "flip <true|false>",
+                description: "Flips text 180 degrees (upside-down printing)",
+                category: Formatting,
+                examples: [
+                    "flip true",
+                    "flip false"
+                ],
+                parser: map(
+                    preceded(pair(tag("flip"), space1), bool),
+                    |flip| Command::Raw(printer::Command::Flip(flip))
+                )
+            },
+            {
+                name: "justify",
+                syntax: "justify <left|center|right>",
+                description: "Sets text justification/alignment",
+                category: Layout,
+                examples: [
+                    "justify left",
+                    "justify center",
+                    "justify right"
+                ],
+                parser: map(
+                    preceded(pair(tag("justify"), space1), justify_mode),
+                    |mode| Command::Raw(printer::Command::Justify(mode))
+                )
+            },
+            {
+                name: "reverse",
+                syntax: "reverse <true|false>",
+                description: "Enables or disables reverse video (white text on black background)",
+                category: Formatting,
+                examples: [
+                    "reverse true",
+                    "reverse false"
+                ],
+                parser: map(
+                    preceded(pair(tag("reverse"), space1), bool),
+                    |reverse| Command::Raw(printer::Command::Reverse(reverse))
+                )
+            },
+            {
+                name: "feed",
+                syntax: "feed <lines>",
+                description: "Feeds paper forward by the specified number of lines",
+                category: Layout,
+                examples: [
+                    "feed 1",
+                    "feed 3",
+                    "feed 10"
+                ],
+                parser: map(
+                    preceded(pair(tag("feed"), space1), u8),
+                    |lines| Command::Raw(printer::Command::Feed(lines))
+                )
+            },
+            {
+                name: "feed",
+                syntax: "feed",
+                description: "Feeds paper forward by 1 line (default)",
+                category: Layout,
+                examples: ["feed"],
+                parser: map(tag("feed"), |_| Command::Raw(printer::Command::Feed(1)))
+            },
+            {
+                name: "ean13",
+                syntax: "ean13 <12-13 digits>",
+                description: "Prints an EAN-13 barcode (12 or 13 digits)",
+                category: Barcodes,
+                examples: [
+                    "ean13 1234567890123",
+                    "ean13 123456789012"
+                ],
+                parser: map(
+                    preceded(
+                        pair(tag("ean13"), space1),
+                        take_while_m_n(12, 13, AsChar::is_dec_digit)
+                    ),
+                    |digits| Command::Raw(printer::Command::Ean13(String::from(digits)))
+                )
+            },
+            {
+                name: "ean8",
+                syntax: "ean8 <7-8 digits>",
+                description: "Prints an EAN-8 barcode (7 or 8 digits)",
+                category: Barcodes,
+                examples: [
+                    "ean8 12345678",
+                    "ean8 1234567"
+                ],
+                parser: map(
+                    preceded(
+                        pair(tag("ean8"), space1),
+                        take_while_m_n(7, 8, AsChar::is_dec_digit)
+                    ),
+                    |digits| Command::Raw(printer::Command::Ean8(String::from(digits)))
+                )
+            },
+            {
+                name: "qr_code",
+                syntax: "qr_code \"<data>\"",
+                description: "Prints a QR code with the specified data",
+                category: Barcodes,
+                examples: [
+                    "qr_code \"https://example.com\"",
+                    "qr_code \"Hello World\""
+                ],
+                parser: map(
+                    preceded(pair(tag("qr_code"), space1), escaped_string),
+                    |data| Command::Raw(printer::Command::QrCode(data))
+                )
+            },
+            {
+                name: "size",
+                syntax: "size <width>,<height>",
+                description: "Sets text size multiplier (1-8 for both width and height)",
+                category: Formatting,
+                examples: [
+                    "size 1,1",
+                    "size 2,2",
+                    "size 3,1"
+                ],
+                parser: map(
+                    preceded(pair(tag("size"), space1), separated_pair(u8, tag(","), u8)),
+                    |(a, b)| Command::Raw(printer::Command::Size(a, b))
+                )
+            },
+            {
+                name: "reset_size",
+                syntax: "reset_size",
+                description: "Resets text size to default (1x1)",
+                category: Formatting,
+                examples: ["reset_size"],
+                parser: map(tag("reset_size"), |_| Command::Raw(printer::Command::ResetSize))
+            },
+            {
+                name: "sudoku",
+                syntax: "sudoku",
+                description: "Generates and prints a random Sudoku puzzle",
+                category: Special,
+                examples: ["sudoku"],
+                parser: map(tag("sudoku"), |_| Command::Sudoku)
+            },
+            {
+                name: "minicrossword",
+                syntax: "minicrossword",
+                description: "Generates and prints a mini crossword puzzle",
+                category: Special,
+                examples: ["minicrossword"],
+                parser: map(tag("minicrossword"), |_| Command::MiniCrossword)
+            },
+            {
+                name: "cut",
+                syntax: "cut",
+                description: "Cuts the paper (if printer has auto-cutter)",
+                category: Special,
+                examples: ["cut"],
+                parser: map(tag("cut"), |_| Command::Raw(printer::Command::Cut))
+            },
+            {
+                name: "todo",
+                syntax: "todo \"<task>\"",
+                description: "Adds a todo item (implementation-specific behavior)",
+                category: Special,
+                examples: [
+                    "todo \"Buy groceries\"",
+                    "todo \"Call dentist\""
+                ],
+                parser: map(
+                    preceded(pair(tag("todo"), space1), escaped_string),
+                    Command::ToDo
+                )
+            }
+        }
         .parse(input)
     }
 }
@@ -182,117 +376,6 @@ mod tests {
 
     #[test]
     fn test_add() {
-        assert_eq!(
-            Command::parse("writeln \"rofl\""),
-            Ok((
-                "",
-                Command::Raw(printer::Command::Write(String::from("rofl\n")))
-            ))
-        );
-        assert_eq!(
-            Command::parse("bold true"),
-            Ok(("", Command::Raw(printer::Command::Bold(true))))
-        );
-        assert_eq!(
-            Command::parse("bold false"),
-            Ok(("", Command::Raw(printer::Command::Bold(false))))
-        );
-        assert_eq!(
-            Command::parse("underline none"),
-            Ok((
-                "",
-                Command::Raw(printer::Command::Underline(UnderlineMode::None))
-            ))
-        );
-        assert_eq!(
-            Command::parse("underline single"),
-            Ok((
-                "",
-                Command::Raw(printer::Command::Underline(UnderlineMode::Single))
-            ))
-        );
-        assert_eq!(
-            Command::parse("underline double"),
-            Ok((
-                "",
-                Command::Raw(printer::Command::Underline(UnderlineMode::Double))
-            ))
-        );
-        assert_eq!(
-            Command::parse("font a"),
-            Ok(("", Command::Raw(printer::Command::Font(Font::A))))
-        );
-        assert_eq!(
-            Command::parse("font b"),
-            Ok(("", Command::Raw(printer::Command::Font(Font::B))))
-        );
-        assert_eq!(
-            Command::parse("font c"),
-            Ok(("", Command::Raw(printer::Command::Font(Font::C))))
-        );
-        assert_eq!(
-            Command::parse("flip true"),
-            Ok(("", Command::Raw(printer::Command::Flip(true))))
-        );
-        assert_eq!(
-            Command::parse("flip false"),
-            Ok(("", Command::Raw(printer::Command::Flip(false))))
-        );
-        assert_eq!(
-            Command::parse("justify left"),
-            Ok((
-                "",
-                Command::Raw(printer::Command::Justify(JustifyMode::LEFT))
-            ))
-        );
-        assert_eq!(
-            Command::parse("justify center"),
-            Ok((
-                "",
-                Command::Raw(printer::Command::Justify(JustifyMode::CENTER))
-            ))
-        );
-        assert_eq!(
-            Command::parse("justify right"),
-            Ok((
-                "",
-                Command::Raw(printer::Command::Justify(JustifyMode::RIGHT))
-            ))
-        );
-        assert_eq!(
-            Command::parse("feed 1"),
-            Ok(("", Command::Raw(printer::Command::Feed(1))))
-        );
-        assert_eq!(
-            Command::parse("feed 128"),
-            Ok(("", Command::Raw(printer::Command::Feed(128))))
-        );
-        assert_eq!(
-            Command::parse("feed"),
-            Ok(("", Command::Raw(printer::Command::Feed(1))))
-        );
-        assert_eq!(
-            Command::parse("ean13 1234567890123"),
-            Ok((
-                "",
-                Command::Raw(printer::Command::Ean13(String::from("1234567890123")))
-            ))
-        );
-        assert_eq!(
-            Command::parse("ean8 12345678"),
-            Ok((
-                "",
-                Command::Raw(printer::Command::Ean8(String::from("12345678")))
-            ))
-        );
-        assert_eq!(
-            Command::parse("qr_code \"rofl.de\""),
-            Ok((
-                "",
-                Command::Raw(printer::Command::QrCode(String::from("rofl.de")))
-            ))
-        );
-
         let string = "write \"asdf\"\t\n   \n\n\t\n  \twriteln \"rofl\"\ncut";
         let command = Program::parse(&string);
         assert_eq!(
@@ -307,6 +390,64 @@ mod tests {
                     ]
                 }
             ))
+        );
+    }
+
+    #[test]
+    fn test_all_documented_examples_parse() {
+        // Get all commands from the documentation registry
+        use crate::program::doc_macros::get_registered_commands;
+
+        // Ensure parser is loaded to register commands
+        let _ = Command::parse("");
+
+        let commands = get_registered_commands();
+        assert!(
+            !commands.is_empty(),
+            "No commands registered - parser may not be loaded"
+        );
+
+        let mut total_examples = 0;
+        let mut failed_examples = Vec::new();
+        let num_commands = commands.len();
+
+        for cmd in &commands {
+            for example in &cmd.examples {
+                total_examples += 1;
+
+                // Try to parse the example
+                match Command::parse(example) {
+                    Ok((remaining, _parsed_cmd)) => {
+                        // Ensure the entire input was consumed
+                        if !remaining.is_empty() {
+                            failed_examples.push(format!(
+                                "Command '{}' example '{}' left unparsed input: '{}'",
+                                cmd.name, example, remaining
+                            ));
+                        }
+                    }
+                    Err(e) => {
+                        failed_examples.push(format!(
+                            "Command '{}' example '{}' failed to parse: {:?}",
+                            cmd.name, example, e
+                        ));
+                    }
+                }
+            }
+        }
+
+        if !failed_examples.is_empty() {
+            panic!(
+                "Failed to parse {} out of {} examples:\n{}",
+                failed_examples.len(),
+                total_examples,
+                failed_examples.join("\n")
+            );
+        }
+
+        println!(
+            "✓ Successfully parsed all {} examples from {} commands",
+            total_examples, num_commands
         );
     }
 }

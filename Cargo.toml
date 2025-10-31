@@ -16,6 +16,7 @@ mqtt-typed-client = {version = "0.1.0", features = ["json"] }
 mqtt-typed-client-core = "0.1.0"
 mqtt-typed-client-macros = "0.1.0"
 nom = "8.0.0"
+once_cell = "1.20.2"
 reqwest = {version = "0.12.23", features = ["json", "rustls-tls", "http2"], default-features = false }
 resvg = "0.45.1"
 rustoku-lib = "0.12.2"

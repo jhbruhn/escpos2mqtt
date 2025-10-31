@@ -549,6 +549,7 @@ dependencies = [
  "mqtt-typed-client-core",
  "mqtt-typed-client-macros",
  "nom 8.0.0",
+ "once_cell",
  "reqwest",
  "resvg",
  "rustoku-lib",
