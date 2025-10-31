@@ -32,3 +32,5 @@ qr_code "https://example.com/receipt/12345"
 feed 2
 cut
 ```
+
+![receipt](./receipt.jpg)
