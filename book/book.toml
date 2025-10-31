@@ -1,0 +1,7 @@
+[book]
+authors = ["Jan-Henrik Bruhn"]
+language = "en"
+src = "src"
+title = "escpos2mqtt Documentation"
+
+[preprocessor.cmdrun]
