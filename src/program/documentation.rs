@@ -39,7 +39,6 @@ pub fn all_commands() -> Vec<CommandDoc> {
     get_registered_commands()
 }
 
-
 /// Generate markdown documentation for all commands
 pub fn generate_markdown() -> String {
     generate_markdown_with_commands(all_commands())
@@ -48,16 +47,6 @@ pub fn generate_markdown() -> String {
 /// Generate markdown documentation with specific commands
 fn generate_markdown_with_commands(commands: Vec<CommandDoc>) -> String {
     let mut output = String::new();
-
-    writeln!(output, "# ESC/POS DSL Reference").unwrap();
-    writeln!(output).unwrap();
-    writeln!(output, "This document describes the Domain Specific Language (DSL) used to send printing commands to ESC/POS-compatible printers.").unwrap();
-    writeln!(output).unwrap();
-    writeln!(output, "## Overview").unwrap();
-    writeln!(output).unwrap();
-    writeln!(output, "The DSL consists of commands that are executed sequentially. Each command must be on its own line.").unwrap();
-    writeln!(output, "Empty lines are ignored. String arguments must be enclosed in double quotes.").unwrap();
-    writeln!(output).unwrap();
 
     // Group commands by category
     let categories: Vec<CommandCategory> = vec![
@@ -72,12 +61,13 @@ fn generate_markdown_with_commands(commands: Vec<CommandDoc>) -> String {
         writeln!(output, "## {}", category.name()).unwrap();
         writeln!(output).unwrap();
 
-        let category_commands: Vec<_> = commands.iter()
+        let category_commands: Vec<_> = commands
+            .iter()
             .filter(|cmd| &cmd.category == category)
             .collect();
 
         for cmd in category_commands {
-            writeln!(output, "### `{}`", cmd.name).unwrap();
+            writeln!(output, "### {}", cmd.name).unwrap();
             writeln!(output).unwrap();
             writeln!(output, "**Syntax:** `{}`", cmd.syntax).unwrap();
             writeln!(output).unwrap();
@@ -97,29 +87,6 @@ fn generate_markdown_with_commands(commands: Vec<CommandDoc>) -> String {
         }
     }
 
-    writeln!(output, "## Complete Example").unwrap();
-    writeln!(output).unwrap();
-    writeln!(output, "```").unwrap();
-    writeln!(output, "justify center").unwrap();
-    writeln!(output, "bold true").unwrap();
-    writeln!(output, "size 2,2").unwrap();
-    writeln!(output, "writeln \"RECEIPT\"").unwrap();
-    writeln!(output, "reset_size").unwrap();
-    writeln!(output, "bold false").unwrap();
-    writeln!(output, "feed 1").unwrap();
-    writeln!(output, "justify left").unwrap();
-    writeln!(output, "writeln \"Item 1          $10.00\"").unwrap();
-    writeln!(output, "writeln \"Item 2          $15.00\"").unwrap();
-    writeln!(output, "underline single").unwrap();
-    writeln!(output, "writeln \"Total:          $25.00\"").unwrap();
-    writeln!(output, "underline none").unwrap();
-    writeln!(output, "feed 2").unwrap();
-    writeln!(output, "justify center").unwrap();
-    writeln!(output, "qr_code \"https://example.com/receipt/12345\"").unwrap();
-    writeln!(output, "feed 2").unwrap();
-    writeln!(output, "cut").unwrap();
-    writeln!(output, "```").unwrap();
-
     output
 }
 
@@ -132,8 +99,6 @@ pub fn generate_text() -> String {
 fn generate_text_with_commands(commands: Vec<CommandDoc>) -> String {
     let mut output = String::new();
 
-    writeln!(output, "ESC/POS DSL COMMAND REFERENCE").unwrap();
-    writeln!(output, "==============================").unwrap();
     writeln!(output).unwrap();
 
     for cmd in commands {
@@ -166,14 +131,16 @@ mod tests {
     fn test_all_commands_not_empty() {
         ensure_parser_loaded();
         let commands = all_commands();
-        assert!(!commands.is_empty(), "No commands were registered. Make sure parser is loaded.");
+        assert!(
+            !commands.is_empty(),
+            "No commands were registered. Make sure parser is loaded."
+        );
     }
 
     #[test]
     fn test_generate_markdown() {
         ensure_parser_loaded();
         let markdown = generate_markdown();
-        assert!(markdown.contains("# ESC/POS DSL Reference"));
         assert!(markdown.contains("write"));
         assert!(markdown.contains("bold"));
         assert!(markdown.contains("qr_code"));
@@ -183,7 +150,6 @@ mod tests {
     fn test_generate_text() {
         ensure_parser_loaded();
         let text = generate_text();
-        assert!(text.contains("ESC/POS DSL COMMAND REFERENCE"));
         assert!(text.contains("WRITE"));
         assert!(text.contains("BOLD"));
     }
@@ -192,10 +158,8 @@ mod tests {
     fn test_all_categories_present() {
         ensure_parser_loaded();
         let commands = all_commands();
-        let categories: std::collections::HashSet<_> = commands
-            .iter()
-            .map(|cmd| &cmd.category)
-            .collect();
+        let categories: std::collections::HashSet<_> =
+            commands.iter().map(|cmd| &cmd.category).collect();
 
         assert!(categories.contains(&CommandCategory::Text));
         assert!(categories.contains(&CommandCategory::Formatting));

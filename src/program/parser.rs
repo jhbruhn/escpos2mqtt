@@ -106,7 +106,7 @@ impl Command {
             {
                 name: "write",
                 syntax: "write \"<text>\"",
-                description: "Outputs text to the printer without a line break",
+                description: "Outputs text to the printer without a line break at the end",
                 category: Text,
                 examples: [
                     "write \"Hello World\"",
@@ -163,7 +163,7 @@ impl Command {
             {
                 name: "double_strike",
                 syntax: "double_strike <true|false>",
-                description: "Enables or disables double-strike (emphasized) text",
+                description: "Enables or disables double-strike for text",
                 category: Formatting,
                 examples: [
                     "double_strike true",
@@ -177,7 +177,7 @@ impl Command {
             {
                 name: "font",
                 syntax: "font <a|b|c>",
-                description: "Sets the font type. Available fonts depend on printer model",
+                description: "Sets the font type. Available fonts depend on printer model and might fallback to another font if unavailable.",
                 category: Formatting,
                 examples: [
                     "font a",
@@ -192,7 +192,7 @@ impl Command {
             {
                 name: "flip",
                 syntax: "flip <true|false>",
-                description: "Flips text 180 degrees (upside-down printing)",
+                description: "Flips text 180 degrees",
                 category: Formatting,
                 examples: [
                     "flip true",
@@ -221,7 +221,7 @@ impl Command {
             {
                 name: "reverse",
                 syntax: "reverse <true|false>",
-                description: "Enables or disables reverse video (white text on black background)",
+                description: "Enables or disables inverted text colors (white text on black background)",
                 category: Formatting,
                 examples: [
                     "reverse true",
@@ -306,7 +306,7 @@ impl Command {
             {
                 name: "size",
                 syntax: "size <width>,<height>",
-                description: "Sets text size multiplier (1-8 for both width and height)",
+                description: "Sets character size multiplier (1-8 for both width and height)",
                 category: Formatting,
                 examples: [
                     "size 1,1",
@@ -321,7 +321,7 @@ impl Command {
             {
                 name: "reset_size",
                 syntax: "reset_size",
-                description: "Resets text size to default (1x1)",
+                description: "Resets text size to default (1,1)",
                 category: Formatting,
                 examples: ["reset_size"],
                 parser: map(tag("reset_size"), |_| Command::Raw(printer::Command::ResetSize))
@@ -353,7 +353,7 @@ impl Command {
             {
                 name: "todo",
                 syntax: "todo \"<task>\"",
-                description: "Adds a todo item (implementation-specific behavior)",
+                description: "Adds a line rendered as a todo item",
                 category: Special,
                 examples: [
                     "todo \"Buy groceries\"",
