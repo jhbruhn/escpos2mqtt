@@ -32,7 +32,7 @@ mqtt://broker/
 ## Printing
 To print, send a program to the printers MQTT topic.
 A program is a newline-separated listed of commands.
-See the [command reference](comman-reference.md) for a description of all commands.
+See the [command reference](command-reference.md) for a description of all commands.
 
 The specific topic of a printer follows the structure `escpos/{printer_id}/print`, where `printer_id` is the printers ID.
 Find the printers ID by checking the logs, or `manual` if you want to use the manual printer.
