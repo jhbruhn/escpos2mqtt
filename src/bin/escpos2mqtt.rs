@@ -2,7 +2,7 @@ use env_logger;
 use envconfig::Envconfig;
 use escpos::driver::NetworkDriver;
 use escpos_db::Profile;
-use mqtt_typed_client::MqttClient;
+use mqtt_typed_client::{MqttClient, MqttClientConfig};
 use mqtt_typed_client_macros::mqtt_topic;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -29,6 +29,19 @@ struct Config {
 pub struct PrintJobTopic {
     printer: String, // Extracted from first topic parameter {language}
     payload: String, // Automatically deserialized message payload
+}
+
+#[mqtt_topic("homeassistant/{domain}/{id}/config")]
+#[derive(Debug)]
+pub struct HomeAssistantDiscoveryTopic {
+    domain: String,
+    id: String,
+    payload: mqtt::homeassistant::Configuration,
+}
+
+#[mqtt_topic("escpos/available")]
+pub struct ServiceAvailableTopic {
+    payload: String,
 }
 
 #[allow(dead_code)]
@@ -148,10 +161,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     log::info!("Connecting to MQTT Broker.");
-    let (client, _connection) = MqttClient::<string_serializer::JsonSerializer>::connect(
+
+    let mut mqtt_config = MqttClientConfig::<mqtt::string_serializer::JsonSerializer>::from_url(
         &build_url(&config.mqtt_url, "escpos"),
-    )
-    .await?;
+    )?;
+
+    let last_will = ServiceAvailableTopic::last_will(String::from("offline"))
+        .qos(mqtt_typed_client::QoS::AtLeastOnce);
+
+    mqtt_config.with_last_will(last_will)?;
+
+    let (client, _connection) =
+        MqttClient::<mqtt::string_serializer::JsonSerializer>::connect_with_config(mqtt_config)
+            .await?;
+
+    let online_topic = client.service_available_topic();
+    online_topic.publish(&"online".to_string()).await?;
+
+    for (id, (printer, profile)) in get_printers(&config).await? {
+        let message = mqtt::homeassistant::Configuration::new(
+            mqtt::homeassistant::Domain::Notify,
+            "Receipt",
+            &format!("escpos/{}/print", id),
+            "escpos/available",
+            &id,
+            &id,
+            &printer.name,
+            &format!("{} - {}", &profile.name, &printer.description),
+        );
+
+        client
+            .home_assistant_discovery_topic()
+            .publish(
+                &mqtt::homeassistant::Domain::Notify.to_string(),
+                &id,
+                &message,
+            )
+            .await?;
+    }
 
     let topic_client = client.print_job_topic();
 
