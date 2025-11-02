@@ -66,6 +66,7 @@ async fn get_snmp_details(addr: &IpAddr) -> Result<Info, Error> {
 }
 
 pub async fn discover_network_printers() -> Result<Vec<Info>, Error> {
+    log::debug!("discover_network_printers: binding UDP socket");
     let sock = UdpSocket::bind("0.0.0.0:0").await?;
     sock.set_broadcast(true)?;
 
@@ -77,6 +78,7 @@ pub async fn discover_network_printers() -> Result<Vec<Info>, Error> {
         .copied()
         .collect();
 
+    log::debug!("discover_network_printers: sending broadcast");
     let _len = sock
         .send_to(
             &query,
@@ -87,21 +89,41 @@ pub async fn discover_network_printers() -> Result<Vec<Info>, Error> {
         .await?;
 
     let mut printers = vec![];
+    const MAX_RESPONSES: usize = 100; // Safety limit
 
+    log::debug!("discover_network_printers: waiting for responses");
     loop {
+        if printers.len() >= MAX_RESPONSES {
+            log::warn!("Reached maximum discovery responses ({}), stopping", MAX_RESPONSES);
+            break;
+        }
+
         let mut buf = [0 as u8; 1024];
         if let Ok(Ok((_len, addr))) =
             tokio::time::timeout(DISCOVERY_RESPONSE_TIMEOUT, sock.recv_from(&mut buf)).await
         {
-            if let Ok(Ok(info)) =
-                tokio::time::timeout(SNMP_RESPONSE_TIMEOUT, get_snmp_details(&addr.ip())).await
+            log::debug!("discover_network_printers: got response from {}", addr);
+
+            // Spawn SNMP query in separate task to avoid stack overflow
+            let ip = addr.ip();
+            let handle = tokio::spawn(async move {
+                get_snmp_details(&ip).await
+            });
+
+            if let Ok(Ok(Ok(info))) =
+                tokio::time::timeout(SNMP_RESPONSE_TIMEOUT, handle).await
             {
+                log::debug!("discover_network_printers: got SNMP info: {:?}", info);
                 printers.push(info);
+            } else {
+                log::debug!("discover_network_printers: SNMP timeout or error for {}", addr);
             }
         } else {
+            log::debug!("discover_network_printers: no more responses");
             break;
         }
     }
 
+    log::debug!("discover_network_printers: returning {} printers", printers.len());
     Ok(printers)
 }

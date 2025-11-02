@@ -1,13 +1,14 @@
 use env_logger;
 use envconfig::Envconfig;
-use escpos::driver::NetworkDriver;
-use escpos_db::Profile;
 use mqtt_typed_client::{MqttClient, MqttClientConfig};
-use mqtt_typed_client_macros::mqtt_topic;
-use std::collections::HashMap;
+use std::time::Duration;
 use uuid::Uuid;
 
-use escpos2mqtt::*;
+use escpos2mqtt::discovery_service::{DiscoveryConfig, DiscoveryService};
+use escpos2mqtt::mqtt_service::MqttService;
+use escpos2mqtt::mqtt::topics::ServiceAvailableTopic;
+use escpos2mqtt::mqtt::topics::service_available_topic::ServiceAvailableTopicExt;
+use escpos2mqtt::registry::PrinterRegistry;
 
 #[derive(Envconfig)]
 struct Config {
@@ -22,32 +23,18 @@ struct Config {
 
     #[envconfig(from = "MQTT_URL")]
     pub mqtt_url: String,
-}
 
-#[mqtt_topic("escpos/{printer}/print")]
-#[derive(Debug)]
-pub struct PrintJobTopic {
-    printer: String, // Extracted from first topic parameter {language}
-    payload: String, // Automatically deserialized message payload
-}
+    #[envconfig(from = "DISCOVERY_INTERVAL_SECS", default = "30")]
+    pub discovery_interval_secs: u64,
 
-#[mqtt_topic("homeassistant/{domain}/{id}/config")]
-#[derive(Debug)]
-pub struct HomeAssistantDiscoveryTopic {
-    domain: String,
-    id: String,
-    payload: mqtt::homeassistant::Configuration,
-}
-
-#[mqtt_topic("escpos/available")]
-pub struct ServiceAvailableTopic {
-    payload: String,
+    #[envconfig(from = "PRINTER_TIMEOUT_SECS", default = "60")]
+    pub printer_timeout_secs: u64,
 }
 
 #[allow(dead_code)]
 pub fn get_client_id(prefix: &str) -> String {
     let uuid = Uuid::new_v4().to_string();
-    let short_uuid = &uuid[..8]; // Take first 8 characters
+    let short_uuid = &uuid[..8];
     format!("{prefix}_{short_uuid}")
 }
 
@@ -56,30 +43,65 @@ pub fn build_url(base_url: &str, client_id_prefix: &str) -> String {
     let client_id = get_client_id(client_id_prefix);
 
     if base_url.contains('?') {
-        // URL already has query parameters, append with &
         format!("{base_url}&client_id={client_id}")
     } else {
-        // URL has no query parameters, start with ?
         format!("{base_url}?client_id={client_id}")
     }
 }
 
-async fn get_printers(
-    config: &Config,
-) -> anyhow::Result<HashMap<String, (printer::Printer, &Profile<'static>)>> {
-    let mut printers = HashMap::new();
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
 
-    if let Some(host) = config.printer_host.clone() {
+    let config = Config::init_from_env().unwrap();
+
+    log::info!("Starting escpos2mqtt");
+
+    // Connect to MQTT Broker
+    log::info!("Connecting to MQTT Broker");
+
+    let mut mqtt_config =
+        MqttClientConfig::<escpos2mqtt::mqtt::string_serializer::JsonSerializer>::from_url(
+            &build_url(&config.mqtt_url, "escpos"),
+        )?;
+
+    let last_will = ServiceAvailableTopic::last_will(String::from("offline"))
+        .qos(mqtt_typed_client::QoS::AtLeastOnce);
+
+    mqtt_config.with_last_will(last_will)?;
+
+    let (client, connection) =
+        MqttClient::<escpos2mqtt::mqtt::string_serializer::JsonSerializer>::connect_with_config(
+            mqtt_config,
+        )
+        .await?;
+
+    // Publish online status
+    let online_topic = client.service_available_topic();
+    online_topic.publish(&"online".to_string()).await?;
+
+    log::info!("Connected to MQTT broker");
+
+    // Create shared printer registry
+    let registry = PrinterRegistry::new();
+
+    // Subscribe to registry events
+    let registry_event_rx = registry.subscribe();
+
+    // Add manual printer to registry if configured (will emit event automatically)
+    if let Some(host) = &config.printer_host {
         const MANUAL_PRINTER_ID: &str = "manual";
 
-        let mut manual_printer = printer::Printer::new(
+        let host_clone = host.clone();
+        let mut manual_printer = escpos2mqtt::printer::Printer::new(
             move || {
-                log::debug!("Connecting to printer at {}", &host);
-                NetworkDriver::open(&host, 9100, None)
+                log::debug!("Connecting to printer at {}", &host_clone);
+                escpos::driver::NetworkDriver::open(&host_clone, 9100, None)
             },
             "Manual Printer",
             "Manually configured printer",
         );
+
         let manual_model_name = manual_printer.model_name().await;
 
         if let Some(overrider) = &config.printer_model {
@@ -93,157 +115,85 @@ async fn get_printers(
                 }
             }
         }
+
         let manual_printer_model_config = config
             .printer_model
             .clone()
             .or(manual_printer.model_name().await.ok())
-            .unwrap_or("default".to_string());
+            .unwrap_or(config.default_printer_model.clone());
 
-        log::debug!(
+        log::info!(
             "Adding manually configured printer with id {}, and model {}",
             MANUAL_PRINTER_ID,
             &manual_printer_model_config,
         );
-        let default_profile = escpos_db::ALL_PROFILES
+
+        let manual_profile = escpos_db::ALL_PROFILES
             .get(&manual_printer_model_config)
             .expect(&format!(
                 "Printer model {} not found!",
                 &manual_printer_model_config
             ));
 
-        printers.insert(
+        registry.add_manual_printer(
             MANUAL_PRINTER_ID.to_string(),
-            (manual_printer, (*default_profile)),
-        );
+            manual_printer,
+            *manual_profile,
+        ).await;
     }
 
-    let discovered_printers = printer::discover_network().await?;
+    // Create discovery service config
+    let discovery_config = DiscoveryConfig {
+        default_printer_model: config.default_printer_model,
+        discovery_interval: Duration::from_secs(config.discovery_interval_secs),
+        printer_timeout: Duration::from_secs(config.printer_timeout_secs),
+    };
 
-    for mut discovered_printer in discovered_printers {
-        let id = discovered_printer.name.to_lowercase();
+    // Clone client and registry for services
+    let mqtt_service_client = client.clone();
+    let discovery_registry = registry.clone();
+    let mqtt_service_registry = registry.clone();
 
-        let model_name = discovered_printer
-            .model_name()
-            .await
-            .ok()
-            .unwrap_or(config.default_printer_model.clone());
+    // Create services
+    let discovery_service = DiscoveryService::new(discovery_config, discovery_registry);
 
-        let profile = escpos_db::ALL_PROFILES.get(&model_name).unwrap();
-        log::debug!(
-            "Adding network-discovered printer with id {} and model {:?}",
-            id,
-            &profile.name
-        );
-        printers.insert(id, (discovered_printer, (*profile)));
-    }
+    let mqtt_service = MqttService::new(
+        mqtt_service_registry,
+        mqtt_service_client,
+        registry_event_rx,
+    );
 
-    Ok(printers)
-}
+    log::info!(
+        "Starting discovery service (interval: {}s)",
+        config.discovery_interval_secs
+    );
+    log::info!("Starting MQTT service (handles all MQTT operations)");
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
-
-    let config = Config::init_from_env().unwrap();
-
-    log::info!("Running printer discovery");
-    let printers = get_printers(&config).await;
-    if let Ok(printers) = printers {
-        log::info!("Printer discovery finished, discovered printers:");
-        for entry in printers.iter() {
-            log::info!("Printer {}: {}", entry.0, entry.1 .1.name);
+    // Spawn discovery service
+    let discovery_handle = tokio::spawn(async move {
+        if let Err(e) = discovery_service.run().await {
+            log::error!("Discovery service error: {}", e);
         }
-        if printers.len() == 0 {
-            log::info!("No printers discovered!");
+    });
+
+    // Spawn MQTT service
+    let mqtt_handle = tokio::spawn(async move {
+        if let Err(e) = mqtt_service.run().await {
+            log::error!("MQTT service error: {}", e);
         }
-    } else if let Err(err) = printers {
-        log::error!("Could not discovery printers, {}", err);
+    });
+
+    log::info!("All services started successfully");
+
+    // Keep the connection alive by not dropping it
+    let _connection = connection;
+
+    // Wait for all tasks to complete (they shouldn't under normal operation)
+    let result = tokio::try_join!(discovery_handle, mqtt_handle);
+
+    if let Err(e) = result {
+        log::error!("Service error: {}", e);
     }
 
-    log::info!("Connecting to MQTT Broker.");
-
-    let mut mqtt_config = MqttClientConfig::<mqtt::string_serializer::JsonSerializer>::from_url(
-        &build_url(&config.mqtt_url, "escpos"),
-    )?;
-
-    let last_will = ServiceAvailableTopic::last_will(String::from("offline"))
-        .qos(mqtt_typed_client::QoS::AtLeastOnce);
-
-    mqtt_config.with_last_will(last_will)?;
-
-    let (client, _connection) =
-        MqttClient::<mqtt::string_serializer::JsonSerializer>::connect_with_config(mqtt_config)
-            .await?;
-
-    let online_topic = client.service_available_topic();
-    online_topic.publish(&"online".to_string()).await?;
-
-    for (id, (printer, profile)) in get_printers(&config).await? {
-        let message = mqtt::homeassistant::Configuration::new(
-            mqtt::homeassistant::Domain::Notify,
-            "Receipt",
-            &format!("escpos/{}/print", id),
-            "escpos/available",
-            &id,
-            &id,
-            &printer.name,
-            &format!("{} - {}", &profile.name, &printer.description),
-        );
-
-        client
-            .home_assistant_discovery_topic()
-            .publish(
-                &mqtt::homeassistant::Domain::Notify.to_string(),
-                &id,
-                &message,
-            )
-            .await?;
-    }
-
-    let topic_client = client.print_job_topic();
-
-    let mut subscriber = topic_client.subscribe().await?;
-
-    log::info!("Listening for print jobs");
-
-    loop {
-        let response = subscriber.receive().await;
-
-        if let Some(Ok(job)) = response {
-            let printers = get_printers(&config).await;
-            if let Ok(mut printers) = printers {
-                if let Some((printer, profile)) = printers.get_mut(job.printer.as_str()) {
-                    let program_string = job.payload;
-                    let parsed = program::Program::parse(&program_string);
-                    if let Ok((remains, program)) = parsed {
-                        if remains.len() > 0 {
-                            log::error!(
-                                "Could not fully parse program. Failed to parse from: {}",
-                                remains
-                            )
-                        } else {
-                            log::info!("Printing program {:?}", program);
-
-                            if let Err(err) = printer
-                                .print(renderer::render(program, profile).await)
-                                .await
-                            {
-                                log::error!("Failed to print: {}", err);
-                            } else {
-                                log::info!("Printed program.")
-                            }
-                        }
-                    } else if let Err(err) = parsed {
-                        log::error!("Could not parse program: {}", err);
-                    }
-                } else {
-                    log::error!("Could not find printer with id {}", job.printer);
-                }
-            } else {
-                log::error!("Could not discover printers: {}", printers.unwrap_err());
-            }
-        } else {
-            log::error!("Could not parse message: {:?}", response);
-        }
-    }
+    Ok(())
 }

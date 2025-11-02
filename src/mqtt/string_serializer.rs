@@ -47,15 +47,18 @@ impl MessageSerializer<Vec<u8>> for JsonSerializer {
     }
 }
 
-impl MessageSerializer<Configuration> for JsonSerializer {
+impl MessageSerializer<Option<Configuration>> for JsonSerializer {
     type SerializeError = serde_json::Error;
     type DeserializeError = serde_json::Error;
 
-    fn serialize(&self, data: &Configuration) -> Result<Vec<u8>, Self::SerializeError> {
-        serde_json::to_vec(data)
+    fn serialize(&self, data: &Option<Configuration>) -> Result<Vec<u8>, Self::SerializeError> {
+        match data {
+            Some(data) => serde_json::to_vec(data),
+            None => Ok(vec![]),
+        }
     }
 
-    fn deserialize(&self, bytes: &[u8]) -> Result<Configuration, Self::DeserializeError> {
+    fn deserialize(&self, bytes: &[u8]) -> Result<Option<Configuration>, Self::DeserializeError> {
         serde_json::from_slice(bytes)
     }
 }

@@ -26,7 +26,7 @@ pub enum Error {
 pub struct Printer {
     pub name: String,
     pub description: String,
-    program_sender: UnboundedSender<Job>,
+    pub(crate) program_sender: UnboundedSender<Job>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -51,7 +51,7 @@ pub enum Command {
 
 pub struct Program(pub Vec<Command>);
 
-enum Job {
+pub(crate) enum Job {
     Print(Program, Sender<Result<(), Error>>),
     GetModelName(Sender<Result<String, Error>>),
 }
