@@ -36,3 +36,8 @@ See the [command reference](command-reference.md) for a description of all comma
 
 The specific topic of a printer follows the structure `escpos/{printer_id}/print`, where `printer_id` is the printers ID.
 Find the printers ID by checking the logs, or `manual` if you want to use the manual printer.
+
+## HomeAssistant
+The service will create notify entities for HomeAssistant MQTT discovery.
+Send programs to these notify endpoints to print receipts via HomeAssistant easily.
+Alternatively, you can publish raw MQTT messages to the correct topics.
