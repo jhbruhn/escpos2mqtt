@@ -31,14 +31,12 @@ struct Config {
     pub printer_timeout_secs: u64,
 }
 
-#[allow(dead_code)]
 pub fn get_client_id(prefix: &str) -> String {
     let uuid = Uuid::new_v4().to_string();
     let short_uuid = &uuid[..8];
     format!("{prefix}_{short_uuid}")
 }
 
-#[allow(dead_code)]
 pub fn build_url(base_url: &str, client_id_prefix: &str) -> String {
     let client_id = get_client_id(client_id_prefix);
 
@@ -53,7 +51,10 @@ pub fn build_url(base_url: &str, client_id_prefix: &str) -> String {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
-    let config = Config::init_from_env().unwrap();
+    // Load configuration from environment variables.
+    // Propagate any error instead of panicking so the service exits gracefully
+    // with a clear message.
+    let config = Config::init_from_env()?;
 
     log::info!("Starting escpos2mqtt");
 
