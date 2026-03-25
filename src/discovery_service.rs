@@ -27,7 +27,6 @@ impl DiscoveryService {
 
         loop {
             tick.tick().await;
-            log::info!("Running periodic printer discovery");
             log::debug!("About to call discover_and_update");
 
             if let Err(e) = self.discover_and_update().await {
