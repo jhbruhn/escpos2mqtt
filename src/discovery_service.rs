@@ -53,10 +53,14 @@ impl DiscoveryService {
             }
         }
 
-        // For still-present printers, just touch their last_seen timestamp
-        // Don't replace the Printer instance (which would spawn new tasks)
+        // For still-present printers, replace the Printer instance with the
+        // freshly discovered one. This ensures the driver builder always has
+        // the current connection parameters (e.g. if the printer's IP changed).
+        // The old Printer's background task shuts down when its sender is dropped.
         for id in &still_present {
-            self.registry.touch_printer(id).await;
+            if let Some((printer, _)) = printers.remove(id) {
+                self.registry.update_printer(id, printer).await;
+            }
         }
 
         // Check for disappeared printers (not seen beyond timeout)

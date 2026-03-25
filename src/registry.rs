@@ -166,6 +166,20 @@ impl PrinterRegistry {
         }
     }
 
+    /// Replace the Printer instance for an existing entry, preserving metadata
+    /// and without emitting add/remove events. This refreshes the driver
+    /// connection (e.g. if the printer's IP address changed) while keeping
+    /// the printer's logical identity in the registry intact.
+    /// The old Printer's background task will shut down when its sender is dropped.
+    pub async fn update_printer(&self, id: &str, printer: Printer) {
+        let mut printers = self.printers.write().await;
+        if let Some(entry) = printers.get_mut(id) {
+            entry.printer = printer;
+            entry.metadata.update_last_seen();
+            log::debug!("Updated printer instance: {}", id);
+        }
+    }
+
     /// Remove a printer from the registry
     pub async fn remove_printer(&self, id: &str) -> Option<PrinterEntry> {
         let mut printers = self.printers.write().await;
