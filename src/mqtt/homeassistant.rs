@@ -22,10 +22,16 @@ pub struct Device {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct AvailabilityEntry {
+    pub topic: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Configuration {
     name: String,
     command_topic: String,
-    availability_topic: String,
+    availability: Vec<AvailabilityEntry>,
+    availability_mode: String,
     unique_id: String,
     device: Device,
     #[serde(skip)]
@@ -37,7 +43,8 @@ impl Configuration {
         domain: Domain,
         name: &str,
         command_topic: &str,
-        availability_topic: &str,
+        service_availability_topic: &str,
+        printer_availability_topic: &str,
         unique_id: &str,
         device_id: &str,
         device_name: &str,
@@ -46,7 +53,15 @@ impl Configuration {
         Configuration {
             name: String::from(name),
             command_topic: String::from(command_topic),
-            availability_topic: String::from(availability_topic),
+            availability: vec![
+                AvailabilityEntry {
+                    topic: String::from(service_availability_topic),
+                },
+                AvailabilityEntry {
+                    topic: String::from(printer_availability_topic),
+                },
+            ],
+            availability_mode: String::from("all"),
             unique_id: String::from(unique_id),
             device: Device {
                 name: String::from(device_name),

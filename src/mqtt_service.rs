@@ -1,11 +1,12 @@
 use crate::mqtt::homeassistant;
 use crate::mqtt::topics::home_assistant_discovery_topic::HomeAssistantDiscoveryTopicExt;
+use crate::mqtt::topics::printer_available_topic::PrinterAvailableTopicExt;
 use crate::mqtt::topics::print_job_topic::PrintJobTopicExt;
 use crate::program;
 use crate::registry::PrinterRegistry;
 use crate::registry::RegistryEvent;
 use crate::renderer;
-use mqtt_typed_client::MqttClient;
+use mqtt_typed_client::{QoS, MqttClient};
 use tokio::sync::broadcast;
 
 pub struct MqttService {
@@ -82,12 +83,16 @@ impl MqttService {
                 {
                     log::error!("Failed to publish HA discovery: {}", err);
                 }
+
+                if let Err(err) = self.publish_printer_availability(&e.printer_id, "online").await {
+                    log::error!("Failed to publish printer availability: {}", err);
+                }
             }
             RegistryEvent::Removed(e) => {
-                log::info!("Publishing HA removal for printer: {}", e.printer_id);
+                log::info!("Printer disappeared: {}", e.printer_id);
 
-                if let Err(err) = self.publish_removal(&e.printer_id).await {
-                    log::error!("Failed to publish HA removal: {}", err);
+                if let Err(err) = self.publish_printer_availability(&e.printer_id, "offline").await {
+                    log::error!("Failed to publish printer unavailability: {}", err);
                 }
             }
         }
@@ -154,6 +159,7 @@ impl MqttService {
             "Receipt",
             &format!("escpos/{}/print", printer_id),
             "escpos/available",
+            &format!("escpos/{}/available", printer_id),
             printer_id,
             printer_id,
             printer_name,
@@ -162,9 +168,12 @@ impl MqttService {
 
         self.client
             .home_assistant_discovery_topic()
-            .publish(
+            .get_publisher(
                 &homeassistant::Domain::Notify.to_string(),
                 printer_id,
+            )?
+            .with_qos(QoS::AtLeastOnce)
+            .publish_retain(
                 &Some(message),
             )
             .await?;
@@ -172,17 +181,20 @@ impl MqttService {
         Ok(())
     }
 
-    /// Publish Home Assistant removal message for a printer
-    async fn publish_removal(&self, printer_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    /// Publish printer-level availability status
+    async fn publish_printer_availability(
+        &self,
+        printer_id: &str,
+        status: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.client
-            .home_assistant_discovery_topic()
-            .publish(
-                &homeassistant::Domain::Notify.to_string(),
-                printer_id,
-                &None,
-            )
+            .printer_available_topic()
+            .get_publisher(printer_id)?
+            .with_qos(QoS::AtLeastOnce)
+            .publish_retain(&status.to_string())
             .await?;
 
         Ok(())
     }
+
 }

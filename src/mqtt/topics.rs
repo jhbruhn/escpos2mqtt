@@ -5,6 +5,12 @@ pub struct ServiceAvailableTopic {
     pub payload: String,
 }
 
+#[mqtt_topic("escpos/{printer}/available")]
+pub struct PrinterAvailableTopic {
+    pub printer: String,
+    pub payload: String,
+}
+
 #[mqtt_topic("escpos/{printer}/print")]
 #[derive(Debug)]
 pub struct PrintJobTopic {

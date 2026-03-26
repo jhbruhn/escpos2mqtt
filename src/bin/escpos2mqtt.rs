@@ -67,7 +67,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
 
     let last_will = ServiceAvailableTopic::last_will(String::from("offline"))
-        .qos(mqtt_typed_client::QoS::AtLeastOnce);
+        .qos(mqtt_typed_client::QoS::AtLeastOnce)
+        .retain(true);
 
     mqtt_config.with_last_will(last_will)?;
 
@@ -77,9 +78,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
 
-    // Publish online status
+    // Publish online status (retained so HA picks it up on reconnect)
     let online_topic = client.service_available_topic();
-    online_topic.publish(&"online".to_string()).await?;
+    online_topic
+        .get_publisher()?
+        .with_qos(mqtt_typed_client::QoS::AtLeastOnce)
+        .publish_retain(&"online".to_string())
+        .await?;
 
     log::info!("Connected to MQTT broker");
 
